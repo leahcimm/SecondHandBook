@@ -6,7 +6,7 @@
 
 ## 文件與看板
 
-- 需求文件（HackMD）：【網址】
+- 需求文件（HackMD）：【https://hackmd.io/join/note/XWmn4lkSn2】
 - 使用者故事地圖（Miro）：https://miro.com/app/board/uXjVEcYsoOo=/?share_link_id=96070865748
 - 專案看板（Trello）：https://trello.com/b/hiVszH61
 - 實作影片：【網址】
@@ -29,7 +29,7 @@
 1. 安裝 JDK 17 以上與 MongoDB Community Server，並確認 MongoDB 正在執行。
    - Mac（Homebrew）：`brew services start mongodb-community`
    - Windows：安裝時勾選「Install MongoDB as a Service」即會自動執行。
-2. 下載專案：`git clone 【repo 網址】`
+2. 下載專案：`git clone https://github.com/leahcimm/SecondHandBook.git`
 3. 在專案資料夾執行：
    - Mac：`chmod +x mvnw`（第一次）然後 `./mvnw spring-boot:run`
    - Windows：`mvnw.cmd spring-boot:run`
