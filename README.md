@@ -14,6 +14,7 @@
 各 Iteration 繳交時的文件存檔放在 `docs/`：
 
 - `docs/iteration1/需求文件.md`：Iteration 1 需求文件（HackMD 匯出）
+- `docs/iteration2/需求文件.md`：版次 0.2，依 Iteration 1 Review 老師建議修訂（交易確認、運費、書況、同書多賣家）
 - `docs/iteration1/截圖/`、`docs/iteration1/範例封面/`：畫面截圖與 Demo 用書封
 - `docs/lab1/`：Lab1 使用者故事看板
 - `docs/環境安裝.md`：環境安裝踩雷提示
@@ -22,8 +23,17 @@
 
 | 故事 | 內容 | 頁面 / API |
 |---|---|---|
-| US02 刊登書籍 | 填寫書名、作者、科目、書況描述、售價並上傳照片；前後端都會檢查必填欄位、售價為正整數、照片格式與大小；刊登後狀態為「待審核」 | `sell.html`、`POST /api/books` |
+| US02 刊登書籍 | 填寫書名、作者、科目、書況、售價並上傳照片；前後端都會檢查必填欄位、售價為正整數、照片格式與大小；刊登後狀態為「待審核」 | `sell.html`、`POST /api/books` |
 | US03 尋找書籍 | 卡片列表（照片、書名、科目、售價、書況、賣家），可用書名關鍵字搜尋、依科目篩選；沒有書時顯示「目前沒有書籍」 | `index.html`、`GET /api/books?keyword=&subject=` |
+
+## Iteration 1 Review 後的修改（版次 0.2）
+
+| 老師建議 | 程式上的修改 |
+|---|---|
+| 書況沒有標準 | 刊登時書況等級必選（全新／近全新／良好／普通／有缺損），原本的書況描述改為選填補充；列表可依書況篩選，卡片顯示等級 |
+| 運費如何處理 | 刊登時預設校內面交；可勾選「也可以寄送」並填運費（0 以上的整數），列表卡片顯示交付方式與運費 |
+| 多位賣家賣同一本書 | 列表預設依價格由低到高排序，也可改成最新刊登或書況由新到舊 |
+| 交易確認 | 訂單功能（US04 之後）還沒實作，先寫進需求文件的訂單狀態流程 |
 
 ## 技術
 
@@ -48,23 +58,23 @@
 ./mvnw test
 ```
 
-共 12 個測試：`BookServiceTest`（刊登規則與搜尋條件，不需要 MongoDB）、`BookControllerTest`（API 回應碼與錯誤訊息）、`SecondHandBookApplicationTests`（程式能啟動）。
+共 25 個測試：`BookServiceTest`（刊登規則、書況等級、運費、搜尋篩選與排序，不需要 MongoDB）、`BookControllerTest`（API 回應碼與錯誤訊息）、`SecondHandBookApplicationTests`（程式能啟動）。
 
 ## API
 
 | 方法 | 路徑 | 說明 |
 |---|---|---|
-| GET | `/api/books` | 書籍列表，最新的在前；可加 `keyword`（書名包含）與 `subject`（科目） |
+| GET | `/api/books` | 書籍列表；可加 `keyword`（書名包含）、`subject`（科目）、`conditionGrade`（書況等級）、`sort`（`price` 價格低到高，預設／`newest` 最新刊登／`condition` 書況由新到舊） |
 | GET | `/api/books/{id}` | 單本書籍 |
-| POST | `/api/books` | 刊登書籍（`multipart/form-data`：title、author、subject、condition、price、sellerName、sellerContact、image）。成功回 201；資料錯誤回 400 與 `{"message": "錯誤原因"}` |
+| POST | `/api/books` | 刊登書籍（`multipart/form-data`：title、author、subject、conditionGrade、condition、price、shippable、shippingFee、sellerName、sellerContact、image）。成功回 201；資料錯誤回 400 與 `{"message": "錯誤原因"}` |
 
 ## 專案結構
 
 ```
 src/main/java/ntou/cs/secondhandbook/
-├── model/        Book：書籍欄位
+├── model/        Book：書籍欄位；BookForm：刊登表單送進來的資料
 ├── repository/   BookRepository：資料庫存取與搜尋查詢
-├── service/      BookService：刊登規則檢查；FileStorageService：照片儲存
+├── service/      BookService：刊登規則檢查、列表篩選與排序；FileStorageService：照片儲存
 ├── controller/   BookController：API /api/books
 ├── exception/    錯誤處理（統一回傳中文訊息）
 └── config/       WebConfig：讓 /uploads/ 可以讀到上傳的照片

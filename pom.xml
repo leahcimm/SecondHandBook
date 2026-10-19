@@ -10,7 +10,7 @@
     </parent>
     <groupId>ntou.cs</groupId>
     <artifactId>SecondHandBook</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <name>SecondHandBook</name>
     <description>海大二手書交易平台（以 BookReview 範例為基礎）</description>
     <properties>

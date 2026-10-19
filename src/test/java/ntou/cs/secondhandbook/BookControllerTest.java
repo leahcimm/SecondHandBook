@@ -14,6 +14,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -35,7 +38,7 @@ class BookControllerTest {
         Book saved = new Book();
         saved.setTitle("資料結構");
         saved.setStatus("待審核");
-        when(bookService.addBook(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(saved);
+        when(bookService.addBook(any())).thenReturn(saved);
 
         mockMvc.perform(multipart("/api/books")
                         .file(new MockMultipartFile("image", "c.jpg", "image/jpeg", new byte[]{1}))
@@ -46,7 +49,7 @@ class BookControllerTest {
 
     @Test
     void 資料錯誤回400與訊息() throws Exception {
-        when(bookService.addBook(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(bookService.addBook(any()))
                 .thenThrow(new InvalidBookException("售價必須為正整數"));
 
         mockMvc.perform(multipart("/api/books").param("price", "-50"))
@@ -56,10 +59,35 @@ class BookControllerTest {
 
     @Test
     void 列表回傳陣列() throws Exception {
-        when(bookService.findBooks(any(), any())).thenReturn(List.of(new Book(), new Book()));
+        when(bookService.findBooks(any(), any(), any(), any())).thenReturn(List.of(new Book(), new Book()));
 
         mockMvc.perform(get("/api/books").param("keyword", "資料"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    @Test
+    void 刊登表單欄位_含書況等級與寄送運費_都會傳給Service() throws Exception {
+        when(bookService.addBook(any())).thenReturn(new Book());
+
+        mockMvc.perform(multipart("/api/books")
+                        .file(new MockMultipartFile("image", "c.jpg", "image/jpeg", new byte[]{1}))
+                        .param("title", "資料結構").param("subject", "資料結構").param("price", "250")
+                        .param("conditionGrade", "良好").param("shippable", "true").param("shippingFee", "60"))
+                .andExpect(status().isCreated());
+
+        verify(bookService).addBook(argThat(form -> "良好".equals(form.getConditionGrade())
+                && form.isShippable() && "60".equals(form.getShippingFee())
+                && form.getImage() != null));
+    }
+
+    @Test
+    void 列表的書況篩選與排序參數_會傳給Service() throws Exception {
+        when(bookService.findBooks(any(), any(), any(), any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/books").param("conditionGrade", "良好").param("sort", "condition"))
+                .andExpect(status().isOk());
+
+        verify(bookService).findBooks(any(), any(), eq("良好"), eq("condition"));
     }
 }

@@ -43,13 +43,36 @@
             <div class="invalid-feedback">請選擇科目</div>
         </div>
         <div class="mb-3">
-            <label for="condition" class="form-label">書況描述</label>
-            <textarea class="form-control" id="condition" name="condition" rows="3" placeholder="例如：有少量螢光筆畫記，無缺頁"></textarea>
+            <label for="conditionGrade" class="form-label">書況等級 <span class="text-danger">*</span></label>
+            <select class="form-select" id="conditionGrade" name="conditionGrade">
+                <option value="">請選擇書況</option>
+            </select>
+            <div class="invalid-feedback">請選擇書況</div>
+        </div>
+        <div class="mb-3">
+            <label for="condition" class="form-label">書況補充說明</label>
+            <textarea class="form-control" id="condition" name="condition" rows="3" placeholder="例如：第 3 章有螢光筆畫記，封面右下角有折痕"></textarea>
         </div>
         <div class="mb-3">
             <label for="price" class="form-label">售價（元） <span class="text-danger">*</span></label>
             <input type="text" inputmode="numeric" class="form-control" id="price" name="price" placeholder="例如：250">
             <div class="invalid-feedback" id="priceError">售價必須為正整數</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">交付方式</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="meetup" checked disabled>
+                <label class="form-check-label" for="meetup">校內面交（不收運費）</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="shippable" name="shippable" value="true">
+                <label class="form-check-label" for="shippable">也可以寄送</label>
+            </div>
+            <div class="mt-2" id="shippingFeeGroup" style="display: none;">
+                <label for="shippingFee" class="form-label">運費（元） <span class="text-danger">*</span></label>
+                <input type="text" inputmode="numeric" class="form-control" id="shippingFee" name="shippingFee" placeholder="例如：60（賣家吸收運費填 0）">
+                <div class="invalid-feedback">運費必須為 0 以上的整數</div>
+            </div>
         </div>
         <div class="mb-3">
             <label for="image" class="form-label">書籍照片 <span class="text-danger">*</span></label>
@@ -103,6 +126,10 @@
             setError('subject', '請選擇科目');
             ok = false;
         }
+        if (!document.getElementById('conditionGrade').value) {
+            setError('conditionGrade', '請選擇書況');
+            ok = false;
+        }
         const price = document.getElementById('price').value.trim();
         if (!price) {
             setError('price', '請填寫售價');
@@ -110,6 +137,16 @@
         } else if (!/^[0-9]+$/.test(price) || parseInt(price, 10) <= 0) {
             setError('price', '售價必須為正整數');
             ok = false; // "/^[0-9]+$/" 規則：只能由數字 0–9 組成
+        }
+        if (document.getElementById('shippable').checked) {
+            const fee = document.getElementById('shippingFee').value.trim();
+            if (!fee) {
+                setError('shippingFee', '勾選寄送時請填寫運費');
+                ok = false;
+            } else if (!/^[0-9]+$/.test(fee)) {
+                setError('shippingFee', '運費必須為 0 以上的整數');
+                ok = false;
+            }
         }
         const image = document.getElementById('image').files[0];
         if (!image) {
@@ -124,6 +161,11 @@
         }
         return ok;
     }
+
+    // 勾選「也可以寄送」才顯示運費欄位
+    document.getElementById('shippable').addEventListener('change', function () {
+        document.getElementById('shippingFeeGroup').style.display = this.checked ? 'block' : 'none';
+    });
 
     document.getElementById('image').addEventListener('change', function () {
         const preview = document.getElementById('preview');
@@ -172,6 +214,7 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         fillSubjectOptions(document.getElementById('subject'));
+        fillConditionOptions(document.getElementById('conditionGrade'), true);
     });
 </script>
 </body>

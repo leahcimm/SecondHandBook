@@ -50,12 +50,24 @@
 
     <!-- 搜尋與科目篩選 -->
     <form id="searchForm" class="row g-2 mb-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <input type="text" class="form-control" id="keyword" placeholder="輸入書名關鍵字，例如：資料">
         </div>
-        <div class="col-md-4">
+        <div class="col-md-2">
             <select class="form-select" id="subject">
                 <option value="">全部科目</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" id="conditionGrade">
+                <option value="">全部書況</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" id="sort">
+                <option value="price">價格低到高</option>
+                <option value="newest">最新刊登</option>
+                <option value="condition">書況由新到舊</option>
             </select>
         </div>
         <div class="col-md-2 d-grid">
@@ -74,8 +86,11 @@
         const params = new URLSearchParams();
         const keyword = document.getElementById('keyword').value.trim();
         const subject = document.getElementById('subject').value;
+        const conditionGrade = document.getElementById('conditionGrade').value;
         if (keyword) params.append('keyword', keyword);
         if (subject) params.append('subject', subject);
+        if (conditionGrade) params.append('conditionGrade', conditionGrade);
+        params.append('sort', document.getElementById('sort').value);
 
         fetch('/api/books?' + params.toString())
             .then(response => {
@@ -84,7 +99,7 @@
                 }
                 return response.json();
             })
-            .then(books => renderBooks(books, keyword || subject))
+            .then(books => renderBooks(books, keyword || subject || conditionGrade))
             .catch(error => {
                 console.error('Error fetching books:', error);
                 document.getElementById('bookList').innerHTML =
@@ -121,10 +136,12 @@
                     <div class="card-body">
                         <h5 class="card-title">${escapeHtml(book.title)}</h5>
                         <span class="badge bg-info text-dark mb-2">${escapeHtml(book.subject)}</span>
+                        ${book.conditionGrade ? `<span class="badge bg-success mb-2" title="${escapeHtml(conditionDescription(book.conditionGrade))}">書況：${escapeHtml(book.conditionGrade)}</span>` : ''}
                         <span class="badge bg-warning text-dark mb-2">${escapeHtml(book.status)}</span>
                         <p class="price mb-2">NT$ ${book.price}</p>
                         ${book.author ? `<p class="card-text mb-1">作者：${escapeHtml(book.author)}</p>` : ''}
-                        ${book.condition ? `<p class="card-text condition mb-1">書況：${escapeHtml(book.condition)}</p>` : ''}
+                        ${book.condition ? `<p class="card-text condition mb-1">書況說明：${escapeHtml(book.condition)}</p>` : ''}
+                        <p class="card-text small mb-1"><i class="fas fa-truck"></i> ${escapeHtml(deliveryText(book))}</p>
                         ${book.sellerName ? `<p class="card-text text-muted small mb-0">賣家：${escapeHtml(book.sellerName)}</p>` : ''}
                     </div>
                 </div>`;
@@ -137,11 +154,13 @@
         fetchBooks();
     });
 
-    // 選科目後直接篩選，不用再按搜尋
-    document.getElementById('subject').addEventListener('change', fetchBooks);
+    // 選科目、書況或排序後直接更新，不用再按搜尋
+    ['subject', 'conditionGrade', 'sort'].forEach(id =>
+        document.getElementById(id).addEventListener('change', fetchBooks));
 
     document.addEventListener('DOMContentLoaded', function () {
         fillSubjectOptions(document.getElementById('subject'));
+        fillConditionOptions(document.getElementById('conditionGrade'), false);
 
         // 從刊登頁成功跳轉過來時，顯示成功訊息
         if (new URLSearchParams(window.location.search).get('posted') === '1') {
