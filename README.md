@@ -6,10 +6,17 @@
 
 ## 文件與看板
 
-- 需求文件（HackMD）：https://hackmd.io/join/note/XWmn4lkSn2
-- 使用者故事地圖（Miro）：https://miro.com/app/board/uXjVEcYsoOo=/?share_link_id=96070865748
+- 需求文件（HackMD）：https://hackmd.io/QnFb1yC8Qa2DJOQW3-GSNA
+- 使用者故事地圖（Miro）：https://miro.com/app/board/uXjVEcYsoOo=/?share_link_id=124746616302
 - 專案看板（Trello）：https://trello.com/b/hiVszH61
-- 實作影片：【網址】
+- 實作影片：https://youtu.be/OoV9Ew2TyBw
+
+各 Iteration 繳交時的文件存檔放在 `docs/`：
+
+- `docs/iteration1/需求文件.md`：Iteration 1 需求文件（HackMD 匯出）
+- `docs/iteration1/截圖/`、`docs/iteration1/範例封面/`：畫面截圖與 Demo 用書封
+- `docs/lab1/`：Lab1 使用者故事看板
+- `docs/環境安裝.md`：環境安裝踩雷提示
 
 ## Iteration 1 完成的功能
 
