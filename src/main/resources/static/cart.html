@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海大二手書交易平台｜購物車</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        .total {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #d63384;
+        }
+    </style>
+</head>
+<body>
+<nav id="navbar"></nav>
+
+<div class="container" style="max-width: 860px;">
+    <h1 class="h3 mb-3">購物車</h1>
+    <p class="text-muted">一筆訂單只能對應一位賣家，所以購物車依賣家分組，每位賣家分開送出。送出一位賣家的訂單後，其他賣家的書會留在購物車。</p>
+    <div id="message"></div>
+    <div id="cartGroups"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+    // 每位賣家選的交付方式，重畫畫面時保留
+    const deliveryChoice = {};
+
+    // 依賣家分組，保留加入購物車的順序
+    function groupBySeller(cart) {
+        const groups = new Map();
+        cart.forEach(item => {
+            if (!groups.has(item.sellerName)) groups.set(item.sellerName, []);
+            groups.get(item.sellerName).push(item);
+        });
+        return groups;
+    }
+
+    // 和後端 OrderService 同樣的算法：寄送時運費只收一次，取這幾本書中最高的運費
+    function calcTotal(items, delivery) {
+        const bookTotal = items.reduce((sum, item) => sum + item.price, 0);
+        const shippingFee = delivery === '寄送' ? Math.max(...items.map(item => item.shippingFee || 0)) : 0;
+        return { bookTotal, shippingFee, total: bookTotal + shippingFee };
+    }
+
+    function renderCart() {
+        const container = document.getElementById('cartGroups');
+        const cart = getCart();
+        if (cart.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-secondary text-center" id="emptyCart">
+                    購物車沒有書籍。<a href="index.html">去書籍列表逛逛</a>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        let index = 0;
+        groupBySeller(cart).forEach((items, seller) => {
+            const groupIndex = index++;
+            // 寄送只限這位賣家的書都可寄送（US04 註記）
+            const allShippable = items.every(item => item.shippable);
+            let delivery = deliveryChoice[seller] || '面交';
+            if (delivery === '寄送' && !allShippable) delivery = '面交';
+            const money = calcTotal(items, delivery);
+
+            const card = document.createElement('div');
+            card.className = 'card mb-4 seller-group';
+            card.dataset.seller = seller;
+            card.innerHTML = `
+                <div class="card-header"><i class="fas fa-store"></i> 賣家：<strong>${escapeHtml(seller)}</strong></div>
+                <ul class="list-group list-group-flush">
+                    ${items.map(item => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                《${escapeHtml(item.title)}》${item.author ? `<span class="text-muted small">${escapeHtml(item.author)}</span>` : ''}
+                                <div class="small text-muted">${escapeHtml(deliveryText(item))}</div>
+                            </div>
+                            <div class="text-nowrap">
+                                NT$ ${item.price}
+                                <button class="btn btn-link btn-sm text-danger remove-item" data-id="${escapeHtml(item.id)}" title="從購物車移除">
+                                    <i class="fas fa-trash"></i></button>
+                            </div>
+                        </li>`).join('')}
+                </ul>
+                <div class="card-body">
+                    <div class="mb-2">
+                        交付方式：
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input delivery" type="radio" name="delivery${groupIndex}" id="meet${groupIndex}" value="面交" ${delivery === '面交' ? 'checked' : ''}>
+                            <label class="form-check-label" for="meet${groupIndex}">校內面交</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input delivery" type="radio" name="delivery${groupIndex}" id="ship${groupIndex}" value="寄送" ${delivery === '寄送' ? 'checked' : ''} ${allShippable ? '' : 'disabled'}>
+                            <label class="form-check-label" for="ship${groupIndex}">寄送</label>
+                        </div>
+                        ${allShippable ? '' : '<div class="small text-muted">有書不提供寄送，只能面交。</div>'}
+                    </div>
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            書價 ${money.bookTotal} 元${delivery === '寄送' ? ` ＋ 運費 ${money.shippingFee} 元` : ''}
+                            ＝ <span class="total">總金額 NT$ <span class="total-amount">${money.total}</span></span>
+                        </div>
+                        <button class="btn btn-primary submit-order"><i class="fas fa-paper-plane"></i> 向這位賣家送出訂單</button>
+                    </div>
+                    <div class="group-message mt-2"></div>
+                </div>`;
+            container.appendChild(card);
+        });
+    }
+
+    async function submitOrder(card, button) {
+        const seller = card.dataset.seller;
+        const items = getCart().filter(item => item.sellerName === seller);
+        const delivery = card.querySelector('.delivery:checked').value;
+        const messageBox = card.querySelector('.group-message');
+        button.disabled = true;
+        button.textContent = '送出中...';
+        try {
+            const order = await api('/api/orders', {
+                method: 'POST',
+                body: JSON.stringify({ bookIds: items.map(item => item.id), deliveryMethod: delivery })
+            });
+            // 成功：只移除這位賣家的書，其他賣家的書留在購物車
+            saveCart(getCart().filter(item => item.sellerName !== seller));
+            delete deliveryChoice[seller];
+            renderCart();
+            showAlert('message', 'success',
+                `已向 ${seller} 送出訂單，共 ${order.items.length} 本，總金額 ${order.totalAmount} 元，狀態：${order.status}。可到「我的訂單」查看。`);
+        } catch (error) {
+            // 失敗：書留在購物車，讓買家可以重試
+            messageBox.innerHTML = `<div class="alert alert-danger mb-0 order-error">送出失敗：${escapeHtml(error.message)}。書籍仍保留在購物車，可修正後重試。</div>`;
+            button.disabled = false;
+            button.innerHTML = '<i class="fas fa-paper-plane"></i> 向這位賣家送出訂單';
+        }
+    }
+
+    document.getElementById('cartGroups').addEventListener('click', function (e) {
+        const removeButton = e.target.closest('.remove-item');
+        if (removeButton) {
+            saveCart(getCart().filter(item => item.id !== removeButton.dataset.id));
+            renderCart();
+            return;
+        }
+        const submitButton = e.target.closest('.submit-order');
+        if (submitButton) {
+            submitOrder(submitButton.closest('.seller-group'), submitButton);
+        }
+    });
+
+    // 改交付方式時重算總金額
+    document.getElementById('cartGroups').addEventListener('change', function (e) {
+        if (e.target.classList.contains('delivery')) {
+            deliveryChoice[e.target.closest('.seller-group').dataset.seller] = e.target.value;
+            renderCart();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        renderNavbar();
+        renderCart();
+    });
+</script>
+</body>
+</html>

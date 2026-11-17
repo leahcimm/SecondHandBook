@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海大二手書交易平台｜我的訂單</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+<nav id="navbar"></nav>
+
+<div class="container" style="max-width: 860px;">
+    <h1 class="h3 mb-3">我的訂單</h1>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><button class="nav-link active" data-role="buyer" id="tabBuyer">我買的</button></li>
+        <li class="nav-item"><button class="nav-link" data-role="seller" id="tabSeller">我賣的</button></li>
+    </ul>
+
+    <div id="message"></div>
+    <div id="orderList"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+    let role = 'buyer';
+
+    const STATUS_BADGE = {
+        '待賣家回覆': 'bg-warning text-dark',
+        '待交付': 'bg-info text-dark',
+        '已完成': 'bg-success',
+        '已拒絕': 'bg-secondary',
+        '已取消': 'bg-secondary'
+    };
+
+    // 每種狀態、每個角色能按的按鈕（照需求文件第 6 章「訂單狀態」表）
+    // 待賣家回覆：賣家接受或拒絕，雙方可取消；待交付：買家確認收到，雙方可取消
+    function actionButtons(order) {
+        const buttons = [];
+        if (role === 'seller' && order.status === '待賣家回覆') {
+            buttons.push(['accept', 'btn-success', 'fa-check', '接受']);
+            buttons.push(['reject', 'btn-outline-danger', 'fa-times', '拒絕']);
+        }
+        if (role === 'buyer' && order.status === '待交付') {
+            buttons.push(['confirm', 'btn-success', 'fa-box-open', '確認收到']);
+        }
+        if (order.status === '待賣家回覆' || order.status === '待交付') {
+            buttons.push(['cancel', 'btn-outline-secondary', 'fa-ban', '取消訂單']);
+        }
+        return buttons.map(([action, style, icon, label]) =>
+            `<button class="btn ${style} btn-sm order-action" data-action="${action}" data-id="${escapeHtml(order.id)}">
+                <i class="fas ${icon}"></i> ${label}</button>`).join(' ');
+    }
+
+    // 已拒絕的訂單：有 rejectReason 是自動拒絕（T11），沒有是賣家手動拒絕
+    function statusNote(order) {
+        if (order.status === '已拒絕') {
+            const reason = order.rejectReason || '賣家拒絕了這筆訂單';
+            return `<div class="alert alert-secondary py-2 mb-2 reject-reason"><i class="fas fa-info-circle"></i> 拒絕原因：${escapeHtml(reason)}</div>`;
+        }
+        if (order.status === '待交付') {
+            return `<div class="small text-muted mb-2">賣家已接受，書已為你保留。${role === 'buyer' ? '拿到書後請按「確認收到」。' : '交付後請等買家確認收到。'}</div>`;
+        }
+        return '';
+    }
+
+    function formatTime(time) {
+        return time ? time.replace('T', ' ').substring(0, 16) : '';
+    }
+
+    function renderOrders(orders) {
+        const list = document.getElementById('orderList');
+        if (orders.length === 0) {
+            list.innerHTML = `<div class="alert alert-secondary text-center" id="emptyOrders">
+                ${role === 'buyer' ? '你還沒有送出任何訂單' : '你還沒有收到任何訂單'}</div>`;
+            return;
+        }
+        list.innerHTML = orders.map(order => `
+            <div class="card mb-3 order-card" data-id="${escapeHtml(order.id)}">
+                <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+                    <span>${role === 'buyer' ? `賣家：<strong>${escapeHtml(order.sellerName)}</strong>` : `買家：<strong>${escapeHtml(order.buyerName)}</strong>`}
+                        <span class="text-muted small ms-2">${escapeHtml(formatTime(order.createdAt))}</span></span>
+                    <span class="badge ${STATUS_BADGE[order.status] || 'bg-secondary'} order-status">${escapeHtml(order.status)}</span>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-2">
+                        ${order.items.map(item => `<li>《${escapeHtml(item.title)}》 NT$ ${item.price}</li>`).join('')}
+                    </ul>
+                    <p class="mb-2">交付方式：${escapeHtml(order.deliveryMethod)}
+                        ${order.deliveryMethod === '寄送' ? `（運費 ${order.shippingFee} 元）` : ''}
+                        ・總金額 <strong>NT$ ${order.totalAmount}</strong></p>
+                    ${statusNote(order)}
+                    <div>${actionButtons(order)}</div>
+                </div>
+            </div>`).join('');
+    }
+
+    async function loadOrders() {
+        const list = document.getElementById('orderList');
+        if (!getUserName()) {
+            list.innerHTML = '<div class="alert alert-warning">請先在右上角輸入你的名稱，才能看到你的訂單。</div>';
+            return;
+        }
+        try {
+            renderOrders(await api('/api/orders?role=' + role));
+        } catch (error) {
+            list.innerHTML = `<div class="alert alert-danger">無法載入訂單：${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    const ACTION_TEXT = { accept: '接受', reject: '拒絕', confirm: '確認收到', cancel: '取消' };
+
+    document.getElementById('orderList').addEventListener('click', async function (e) {
+        const button = e.target.closest('.order-action');
+        if (!button) return;
+        const action = button.dataset.action;
+        if ((action === 'reject' || action === 'cancel') && !confirm(`確定要${ACTION_TEXT[action]}這筆訂單嗎？`)) {
+            return;
+        }
+        button.disabled = true;
+        try {
+            const order = await api(`/api/orders/${encodeURIComponent(button.dataset.id)}/${action}`, { method: 'POST' });
+            showAlert('message', 'success', `已${ACTION_TEXT[action]}，訂單狀態：${order.status}`);
+        } catch (error) {
+            showAlert('message', 'danger', `${ACTION_TEXT[action]}失敗：${error.message}`);
+        }
+        loadOrders();
+    });
+
+    document.querySelectorAll('.nav-tabs .nav-link').forEach(tab => tab.addEventListener('click', function () {
+        document.querySelectorAll('.nav-tabs .nav-link').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        role = this.dataset.role;
+        document.getElementById('message').innerHTML = '';
+        loadOrders();
+    }));
+
+    document.addEventListener('DOMContentLoaded', function () {
+        renderNavbar(loadOrders);
+        loadOrders();
+    });
+</script>
+</body>
+</html>

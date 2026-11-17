@@ -14,12 +14,7 @@
     </style>
 </head>
 <body>
-<nav class="navbar navbar-dark bg-primary mb-4">
-    <div class="container">
-        <a class="navbar-brand" href="index.html"><i class="fas fa-book"></i> 海大二手書交易平台</a>
-        <a class="btn btn-light" href="index.html"><i class="fas fa-list"></i> 書籍列表</a>
-    </div>
-</nav>
+<nav id="navbar"></nav>
 
 <div class="container" style="max-width: 720px;">
     <h1 class="h3 mb-3">刊登書籍</h1>
@@ -213,6 +208,9 @@
     });
 
     document.addEventListener('DOMContentLoaded', function () {
+        renderNavbar();
+        // 賣家稱呼預設帶入右上角的名稱，之後才能用同一個名稱處理收到的訂單
+        document.getElementById('sellerName').value = getUserName();
         fillSubjectOptions(document.getElementById('subject'));
         fillConditionOptions(document.getElementById('conditionGrade'), true);
     });

@@ -36,12 +36,7 @@
     </style>
 </head>
 <body>
-<nav class="navbar navbar-dark bg-primary mb-4">
-    <div class="container">
-        <a class="navbar-brand" href="index.html"><i class="fas fa-book"></i> 海大二手書交易平台</a>
-        <a class="btn btn-light" href="sell.html"><i class="fas fa-plus"></i> 刊登書籍</a>
-    </div>
-</nav>
+<nav id="navbar"></nav>
 
 <div class="container">
     <div id="message"></div>
@@ -82,6 +77,9 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="js/common.js"></script>
 <script>
+    let lastBooks = [];
+    let lastFiltered = false;
+
     function fetchBooks() {
         const params = new URLSearchParams();
         const keyword = document.getElementById('keyword').value.trim();
@@ -99,7 +97,11 @@
                 }
                 return response.json();
             })
-            .then(books => renderBooks(books, keyword || subject || conditionGrade))
+            .then(books => {
+                lastBooks = books;
+                lastFiltered = keyword || subject || conditionGrade;
+                renderBooks(books, lastFiltered);
+            })
             .catch(error => {
                 console.error('Error fetching books:', error);
                 document.getElementById('bookList').innerHTML =
@@ -144,10 +146,48 @@
                         <p class="card-text small mb-1"><i class="fas fa-truck"></i> ${escapeHtml(deliveryText(book))}</p>
                         ${book.sellerName ? `<p class="card-text text-muted small mb-0">賣家：${escapeHtml(book.sellerName)}</p>` : ''}
                     </div>
+                    <div class="card-footer bg-white border-0 pb-3">${cartButton(book)}</div>
                 </div>`;
             bookList.appendChild(bookElement);
         });
     }
+
+    // 卡片下方的按鈕：保留中、已售出的書不能買；自己的書也不顯示購買按鈕（US05 測試方法）
+    function cartButton(book) {
+        if (book.status === '保留中') return '<span class="text-muted"><i class="fas fa-lock"></i> 已保留，暫時不能購買</span>';
+        if (book.status === '已售出') return '<span class="text-muted"><i class="fas fa-check"></i> 已售出</span>';
+        if (!ORDERABLE_BOOK_STATUSES.includes(book.status)) return '';
+        if (!book.sellerName) return '<span class="text-muted small">沒有賣家資料，不能下單</span>';
+        if (book.sellerName === getUserName()) return '<span class="text-muted small">這是你刊登的書</span>';
+        if (getCart().some(item => item.id === book.id)) {
+            return '<a class="btn btn-outline-secondary btn-sm" href="cart.html"><i class="fas fa-check"></i> 已在購物車</a>';
+        }
+        return `<button class="btn btn-primary btn-sm add-to-cart" data-id="${escapeHtml(book.id)}">
+                    <i class="fas fa-cart-plus"></i> 加入購物車</button>`;
+    }
+
+    function addToCart(book) {
+        const cart = getCart();
+        // 購物車已有同名書籍（不同賣家）時先提示（US04 註記）
+        const sameTitle = cart.find(item => item.title === book.title);
+        if (sameTitle && !confirm(`購物車已有同名書籍《${book.title}》（賣家：${sameTitle.sellerName}），仍要加入嗎？`)) {
+            return;
+        }
+        cart.push({
+            id: book.id, title: book.title, author: book.author, price: book.price,
+            sellerName: book.sellerName, shippable: book.shippable, shippingFee: book.shippingFee
+        });
+        saveCart(cart);
+        showAlert('message', 'success', `已加入購物車：《${book.title}》`);
+        renderBooks(lastBooks, lastFiltered);
+    }
+
+    document.getElementById('bookList').addEventListener('click', function (e) {
+        const button = e.target.closest('.add-to-cart');
+        if (!button) return;
+        const book = lastBooks.find(b => b.id === button.dataset.id);
+        if (book) addToCart(book);
+    });
 
     document.getElementById('searchForm').addEventListener('submit', function (e) {
         e.preventDefault();
@@ -159,6 +199,8 @@
         document.getElementById(id).addEventListener('change', fetchBooks));
 
     document.addEventListener('DOMContentLoaded', function () {
+        // 換名稱時重畫卡片（自己的書不顯示購買按鈕）
+        renderNavbar(() => renderBooks(lastBooks, lastFiltered));
         fillSubjectOptions(document.getElementById('subject'));
         fillConditionOptions(document.getElementById('conditionGrade'), false);
 
