@@ -10,6 +10,11 @@ import java.util.List;
 public class Book {
 
     public static final String STATUS_PENDING = "待審核";
+    public static final String STATUS_ACTIVE = "上架中";
+    public static final String STATUS_RESERVED = "保留中";
+    public static final String STATUS_SOLD = "已售出";
+    public static final String STATUS_DELISTED = "已下架";
+    public static final String STATUS_RETURNED = "已退回";
 
     // 書況五級（由新到舊），刊登時必選一個；排序「依書況」也照這個順序
     public static final List<String> CONDITION_GRADES = List.of("全新", "近全新", "良好", "普通", "有缺損");
@@ -29,6 +34,7 @@ public class Book {
     private String sellerContact;// 賣家聯絡方式
     private String status;       // 刊登狀態，預設「待審核」（US07 審核功能再改變）
     private LocalDateTime createdAt;
+    private String reviewReason; // 審核被退回原因
 
     // Getters and setters for all fields
 
@@ -142,5 +148,13 @@ public class Book {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getReviewReason() {
+        return reviewReason;
+    }
+
+    public void setReviewReason(String reviewReason) {
+        this.reviewReason = reviewReason; 
     }
 }

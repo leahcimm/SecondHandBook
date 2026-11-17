@@ -16,19 +16,40 @@
             background-color: #f8f9fa;
             overflow: hidden;
         }
+
         .book-image {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
         }
+
         .card {
             height: 100%;
+            transition: transform .15s, box-shadow .15s;
         }
+
+        .book-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            height: 100%;
+        }
+
+        .book-link:hover {
+            color: inherit;
+        }
+
+        .book-link:hover .card {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,.12);
+        }
+
         .price {
             font-size: 1.25rem;
             font-weight: bold;
             color: #d63384;
         }
+
         .condition {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -36,16 +57,19 @@
     </style>
 </head>
 <body>
+
 <nav class="navbar navbar-dark bg-primary mb-4">
     <div class="container">
         <a class="navbar-brand" href="index.html"><i class="fas fa-book"></i> 海大二手書交易平台</a>
-        <a class="btn btn-light" href="sell.html"><i class="fas fa-plus"></i> 刊登書籍</a>
+        <div>
+            <a class="btn btn-light me-2" href="my-books.html"><i class="fas fa-user"></i> 我的刊登</a>
+            <a class="btn btn-light" href="sell.html"><i class="fas fa-plus"></i> 刊登書籍</a>
+        </div>
     </div>
 </nav>
 
 <div class="container">
     <div id="message"></div>
-
     <h1 class="h3 mb-3">書籍列表</h1>
 
     <!-- 搜尋與科目篩選 -->
@@ -53,16 +77,19 @@
         <div class="col-md-4">
             <input type="text" class="form-control" id="keyword" placeholder="輸入書名關鍵字，例如：資料">
         </div>
+
         <div class="col-md-2">
             <select class="form-select" id="subject">
                 <option value="">全部科目</option>
             </select>
         </div>
+
         <div class="col-md-2">
             <select class="form-select" id="conditionGrade">
                 <option value="">全部書況</option>
             </select>
         </div>
+
         <div class="col-md-2">
             <select class="form-select" id="sort">
                 <option value="price">價格低到高</option>
@@ -70,26 +97,33 @@
                 <option value="condition">書況由新到舊</option>
             </select>
         </div>
+
         <div class="col-md-2 d-grid">
             <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> 搜尋</button>
         </div>
     </form>
 
     <p class="text-muted" id="resultCount"></p>
+
     <div id="bookList" class="row"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="js/common.js"></script>
+
 <script>
+    // 取得書籍列表
     function fetchBooks() {
         const params = new URLSearchParams();
+
         const keyword = document.getElementById('keyword').value.trim();
         const subject = document.getElementById('subject').value;
         const conditionGrade = document.getElementById('conditionGrade').value;
+
         if (keyword) params.append('keyword', keyword);
         if (subject) params.append('subject', subject);
         if (conditionGrade) params.append('conditionGrade', conditionGrade);
+
         params.append('sort', document.getElementById('sort').value);
 
         fetch('/api/books?' + params.toString())
@@ -99,56 +133,96 @@
                 }
                 return response.json();
             })
-            .then(books => renderBooks(books, keyword || subject || conditionGrade))
+            .then(books => renderBooks(
+                books,
+                Boolean(keyword || subject || conditionGrade)
+            ))
             .catch(error => {
                 console.error('Error fetching books:', error);
-                document.getElementById('bookList').innerHTML =
-                    '<div class="col-12"><div class="alert alert-danger">無法載入書籍，請稍後再試。錯誤訊息：' + escapeHtml(error.message) + '</div></div>';
+
+                document.getElementById('bookList').innerHTML = `
+                    '<div class="col-12">
+                        <div class="alert alert-danger">無法載入書籍，請稍後再試。錯誤訊息：${escapeHtml(error.message)}</div></div>`;
             });
     }
 
+    // 顯示書籍卡片
     function renderBooks(books, isFiltered) {
         const bookList = document.getElementById('bookList');
         const resultCount = document.getElementById('resultCount');
+
         bookList.innerHTML = '';
 
         // 空狀態：沒有任何書時顯示提示，而不是一片空白
         if (books.length === 0) {
             resultCount.textContent = '';
+
             bookList.innerHTML = `
                 <div class="col-12">
-                    <div class="alert alert-secondary text-center" id="emptyState">
+                    <div class="alert alert-secondary text-center">
                         ${isFiltered ? '找不到符合條件的書籍' : '目前沒有書籍'}
                     </div>
                 </div>`;
+
             return;
         }
 
         resultCount.textContent = `共 ${books.length} 本`;
+
         books.forEach(book => {
             const bookElement = document.createElement('div');
             bookElement.className = 'col-sm-6 col-lg-4 mb-4';
+
+            const detailUrl = `book-detail.html?id=${encodeURIComponent(book.id)}`;
+
+            const imageHtml = book.imageUrl
+                ? `<img src="${escapeHtml(book.imageUrl)}"
+                        alt="書籍照片"
+                        class="book-image"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                   <div class="text-muted" style="display:none;">
+                       <i class="fas fa-book fa-3x"></i>
+                   </div>`
+                : `<div class="text-muted">
+                       <i class="fas fa-book fa-3x"></i>
+                   </div>`;
+
             bookElement.innerHTML = `
-                <div class="card book-card">
-                    <div class="book-image-container">
-                        <img src="${escapeHtml(book.imageUrl)}" alt="書籍照片" class="book-image">
+                <a href="${detailUrl}" class="book-link">
+                    <div class="card book-card">
+                        <div class="book-image-container">
+                            ${imageHtml}
+                        </div>
+
+                        <div class="card-body">
+                            <h5 class="card-title">${escapeHtml(book.title)}</h5>
+
+                            <span class="badge bg-info text-dark mb-2">${escapeHtml(book.subject || '未分類')}</span>
+
+                            ${book.conditionGrade ? `<span class="badge bg-success mb-2" 
+                                                            title="${escapeHtml(conditionDescription(book.conditionGrade))}">
+                                                            書況：${escapeHtml(book.conditionGrade)}</span>` : ''}
+
+                            <span class="badge bg-warning text-dark mb-2">${escapeHtml(book.status)}</span>
+                            <p class="price mb-2">NT$ ${Number(book.price).toLocaleString('zh-TW')}</p>
+
+                            ${book.author ? `<p class="card-text mb-1">作者：${escapeHtml(book.author)}</p>` : ''}
+                            ${book.condition ? `<p class="card-text condition mb-1">書況說明：${escapeHtml(book.condition)}</p>` : ''}
+
+                            <p class="card-text small mb-1"><i class="fas fa-truck"></i>${escapeHtml(deliveryText(book))}</p>
+
+                            ${book.sellerName ? `<p class="card-text text-muted small mb-0">賣家：${escapeHtml(book.sellerName)}</p>` : ''}
+
+                            <div class="text-primary small mt-3"><i class="fas fa-info-circle"></i>點擊查看書籍詳細資訊</div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <h5 class="card-title">${escapeHtml(book.title)}</h5>
-                        <span class="badge bg-info text-dark mb-2">${escapeHtml(book.subject)}</span>
-                        ${book.conditionGrade ? `<span class="badge bg-success mb-2" title="${escapeHtml(conditionDescription(book.conditionGrade))}">書況：${escapeHtml(book.conditionGrade)}</span>` : ''}
-                        <span class="badge bg-warning text-dark mb-2">${escapeHtml(book.status)}</span>
-                        <p class="price mb-2">NT$ ${book.price}</p>
-                        ${book.author ? `<p class="card-text mb-1">作者：${escapeHtml(book.author)}</p>` : ''}
-                        ${book.condition ? `<p class="card-text condition mb-1">書況說明：${escapeHtml(book.condition)}</p>` : ''}
-                        <p class="card-text small mb-1"><i class="fas fa-truck"></i> ${escapeHtml(deliveryText(book))}</p>
-                        ${book.sellerName ? `<p class="card-text text-muted small mb-0">賣家：${escapeHtml(book.sellerName)}</p>` : ''}
-                    </div>
-                </div>`;
+                </a>`;
+
             bookList.appendChild(bookElement);
         });
     }
 
+    // 搜尋的按鈕
     document.getElementById('searchForm').addEventListener('submit', function (e) {
         e.preventDefault();
         fetchBooks();
@@ -165,7 +239,7 @@
         // 從刊登頁成功跳轉過來時，顯示成功訊息
         if (new URLSearchParams(window.location.search).get('posted') === '1') {
             document.getElementById('message').innerHTML =
-                '<div class="alert alert-success alert-dismissible fade show" id="successMessage">刊登成功！書籍狀態為「待審核」。' +
+                '<div class="alert alert-success alert-dismissible fade show">刊登成功！書籍狀態為「待審核」。' +
                 '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
             history.replaceState(null, '', 'index.html');
         }
@@ -173,5 +247,6 @@
         fetchBooks();
     });
 </script>
+
 </body>
 </html>

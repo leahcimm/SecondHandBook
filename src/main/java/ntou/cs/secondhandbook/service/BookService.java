@@ -59,6 +59,7 @@ public class BookService {
         }
 
         return books.stream()
+                .filter(b -> Book.STATUS_ACTIVE.equals(b.getStatus()))
                 .filter(b -> isBlank(conditionGrade) || conditionGrade.equals(b.getConditionGrade()))
                 .sorted(comparatorFor(sort))
                 .toList();
@@ -67,6 +68,87 @@ public class BookService {
     public Book getBookById(String id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found with id " + id));
+    }
+    
+    // US09: 了解書籍資訊，用於同名書籍查詢
+    public List<Book> findSimilarBooks(String id) {
+        Book currentBook = getBookById(id);
+
+        return repository.findByTitleAndAuthorAndStatus(currentBook.getTitle(), currentBook.getAuthor(), Book.STATUS_ACTIVE)
+                        .stream()
+                        .filter(book -> !book.getId().equals(currentBook.getId()))
+                        .sorted(Comparator.comparingInt(Book::getPrice))
+                        .toList();       
+    }
+    
+    // US10: 下架書籍: 賣家可手動下架「上架中」的書籍
+    // 1.取得指定賣家的所有刊登紀錄
+    public List<Book> findMyBooks(String sellerName) {
+        if (isBlank(sellerName)) {
+            throw new InvalidBookException("請提供賣家名稱");
+        }
+
+        // 查詢該賣家的所有書籍，包含已下架及待審核
+        return repository.findBySellerName(sellerName.trim())
+                .stream()
+                .sorted(NEWEST_FIRST)
+                .toList();
+    }
+    
+    // 2. 下架指定書籍(目前先指定賣家)
+    public Book delistBook(String id, String sellerName) {
+        Book book = getBookById(id);
+
+        if (isBlank(sellerName)) {
+            throw new InvalidBookException("請提供賣家名稱");
+        }
+        if (!sellerName.trim().equals(book.getSellerName())) {
+            throw new ResourceNotFoundException("找不到此賣家的書籍");
+        }
+        if (!Book.STATUS_ACTIVE.equals(book.getStatus())) {
+            throw new InvalidBookException("只有上架中的書籍可以下架");
+        }
+
+        book.setStatus(Book.STATUS_DELISTED);
+        return repository.save(book);
+    }
+
+    // US07 審核書籍
+    // 1. 查詢所有待審核的書籍
+    public List<Book> findPendingBooks() {
+        return repository.findByStatus(Book.STATUS_PENDING)
+                        .stream()
+                        .sorted(NEWEST_FIRST)
+                        .toList();
+    }
+
+    // 2. 管理員核准書籍
+    public Book approveBook(String id) {
+        Book book = getBookById(id);
+
+        if (!Book.STATUS_PENDING.equals(book.getStatus())) {
+            throw new InvalidBookException("只有待審核的書籍可以核准");
+        }
+
+        book.setStatus(Book.STATUS_ACTIVE);
+        book.setReviewReason(null);
+        return repository.save(book);
+    }
+
+    // 3. 管理員退回書籍
+    public Book returnBook(String id, String reason) {
+        Book book = getBookById(id);
+
+        if (isBlank(reason)) {
+            throw new InvalidBookException("退回原因不可為空白");
+        }
+        if (!Book.STATUS_PENDING.equals(book.getStatus())) {
+            throw new InvalidBookException("只有待審核的書籍可以退回");
+        }
+
+        book.setStatus(Book.STATUS_RETURNED);
+        book.setReviewReason(reason.trim());
+        return repository.save(book);
     }
 
     // US02：刊登書籍。先檢查資料，全部通過才存照片與資料

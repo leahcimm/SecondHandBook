@@ -1,0 +1,290 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>書籍詳細資訊｜海大二手書交易平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .book-image-container {
+            min-height: 350px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .book-image {
+            max-width: 100%;
+            max-height: 420px;
+            object-fit: contain;
+        }
+        .price {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #d63384;
+        }
+        .info-label {
+            color: #6c757d;
+            min-width: 100px;
+            display: inline-block;
+        }
+        .similar-card {
+            height: 100%;
+            cursor: pointer;
+            transition: transform .15s;
+        }
+        .similar-card:hover { transform: translateY(-3px); }
+        .similar-image {
+            height: 180px;
+            width: 100%;
+            object-fit: contain;
+            background: white;
+        }
+        .clickable-card { text-decoration: none; color: inherit; }
+        .clickable-card:hover { color: inherit; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-primary mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="index.html">
+            <i class="fas fa-book"></i> 海大二手書交易平台
+        </a>
+        <div>
+            <a class="btn btn-light btn-sm me-2" href="index.html">書籍列表</a>
+            <a class="btn btn-light btn-sm" href="my-books.html">我的刊登</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container mb-5">
+    <div class="mb-3">
+        <a href="index.html" class="text-decoration-none">
+            <i class="fas fa-arrow-left"></i> 返回書籍列表
+        </a>
+    </div>
+
+    <div id="message"></div>
+
+    <div id="bookDetail">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">正在載入書籍資料...</p>
+        </div>
+    </div>
+
+    <hr class="my-5">
+
+    <section>
+        <h3 class="mb-4">
+            <i class="fas fa-book-open"></i> 其他相同書籍
+        </h3>
+        <div id="similarBooks" class="row">
+            <div class="col-12 text-muted">正在載入相似書籍...</div>
+        </div>
+    </section>
+</div>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const bookId = params.get('id');
+
+    function escapeText(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[char]);
+    }
+
+    function formatPrice(price) {
+        const number = Number(price);
+        return Number.isFinite(number) ? number.toLocaleString('zh-TW') : '未提供';
+    }
+
+    function getDeliveryText(book) {
+        if (book.shippable) {
+            const fee = book.shippingFee != null
+                ? `，運費 NT$ ${formatPrice(book.shippingFee)}`
+                : '';
+            return `提供寄送${fee}`;
+        }
+        return '僅面交或其他約定方式';
+    }
+
+    function showError(message) {
+        document.getElementById('message').innerHTML =
+            `<div class="alert alert-danger">${escapeText(message)}</div>`;
+    }
+
+    async function loadBook() {
+        if (!bookId) {
+            showError('網址缺少書籍 ID，無法載入書籍資料。');
+            document.getElementById('bookDetail').innerHTML = '';
+            document.getElementById('similarBooks').innerHTML = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/books/${encodeURIComponent(bookId)}`);
+
+            if (!response.ok) {
+                throw new Error(response.status === 404
+                    ? '找不到這本書籍。'
+                    : `載入失敗，HTTP ${response.status}`);
+            }
+
+            const book = await response.json();
+            renderBook(book);
+            loadSimilarBooks();
+        } catch (error) {
+            showError(error.message);
+            document.getElementById('bookDetail').innerHTML = '';
+            document.getElementById('similarBooks').innerHTML = '';
+        }
+    }
+
+    function renderBook(book) {
+        const image = book.imageUrl
+            ? `<img src="${escapeText(book.imageUrl)}" alt="書籍照片" class="book-image"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">`
+            : '';
+
+        document.getElementById('bookDetail').innerHTML = `
+            <div class="row g-4">
+                <div class="col-md-5">
+                    <div class="book-image-container">
+                        ${image}
+                        <div class="text-muted text-center"
+                             style="display:${book.imageUrl ? 'none' : 'block'}">
+                            <i class="fas fa-book fa-4x mb-3"></i>
+                            <p>目前沒有書籍圖片</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-7">
+                    <h2 class="mb-3">${escapeText(book.title)}</h2>
+
+                    <div class="mb-3">
+                        <span class="badge bg-info text-dark me-1">
+                            ${escapeText(book.subject || '未分類')}
+                        </span>
+                        <span class="badge bg-success me-1">
+                            ${escapeText(book.conditionGrade || '未提供書況')}
+                        </span>
+                        <span class="badge bg-warning text-dark">
+                            ${escapeText(book.status || '未知狀態')}
+                        </span>
+                    </div>
+
+                    <p class="price">NT$ ${formatPrice(book.price)}</p>
+
+                    <hr>
+
+                    <p><span class="info-label">作者：</span>
+                        ${escapeText(book.author || '未提供')}</p>
+
+                    <p><span class="info-label">科目：</span>
+                        ${escapeText(book.subject || '未提供')}</p>
+
+                    <p><span class="info-label">書況：</span>
+                        ${escapeText(book.conditionGrade || '未提供')}</p>
+
+                    <p><span class="info-label">書況說明：</span>
+                        ${escapeText(book.condition || '沒有額外說明')}</p>
+
+                    <p><span class="info-label">交易方式：</span>
+                        ${escapeText(getDeliveryText(book))}</p>
+
+                    <hr>
+
+                    <h5><i class="fas fa-user"></i> 賣家資訊</h5>
+                    <p><span class="info-label">賣家：</span>
+                        ${escapeText(book.sellerName || '未提供')}</p>
+                    <p><span class="info-label">聯絡方式：</span>
+                        ${escapeText(book.sellerContact || '未提供')}</p>
+
+                </div>
+            </div>
+        `;
+    }
+
+    async function loadSimilarBooks() {
+        try {
+            const response = await fetch(
+                `/api/books/${encodeURIComponent(bookId)}/similar`
+            );
+
+            if (!response.ok) {
+                throw new Error('無法載入相同書籍。');
+            }
+
+            const books = await response.json();
+            renderSimilarBooks(books);
+        } catch (error) {
+            document.getElementById('similarBooks').innerHTML =
+                `<div class="col-12"><div class="alert alert-warning">
+                    ${escapeText(error.message)}
+                </div></div>`;
+        }
+    }
+
+    function renderSimilarBooks(books) {
+        const container = document.getElementById('similarBooks');
+
+        if (!books || books.length === 0) {
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-secondary">
+                        目前沒有其他相同書名與作者的上架書籍。
+                    </div>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = books.map(book => {
+            const image = book.imageUrl
+                ? `<img src="${escapeText(book.imageUrl)}" class="similar-image"
+                        alt="書籍照片"
+                        onerror="this.style.display='none';">`
+                : `<div class="similar-image d-flex align-items-center justify-content-center">
+                        <i class="fas fa-book fa-3x text-muted"></i>
+                   </div>`;
+
+            return `
+                <div class="col-sm-6 col-lg-3 mb-4">
+                    <a class="clickable-card"
+                       href="book-detail.html?id=${encodeURIComponent(book.id)}">
+                        <div class="card similar-card">
+                            ${image}
+                            <div class="card-body">
+                                <h6 class="card-title">${escapeText(book.title)}</h6>
+                                <p class="small text-muted mb-1">
+                                    作者：${escapeText(book.author || '未提供')}
+                                </p>
+                                <p class="small mb-1">
+                                    書況：${escapeText(book.conditionGrade || '未提供')}
+                                </p>
+                                <p class="price mb-0">
+                                    NT$ ${formatPrice(book.price)}
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+                </div>`;
+        }).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', loadBook);
+</script>
+</body>
+</html>

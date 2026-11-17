@@ -16,4 +16,13 @@ public interface BookRepository extends MongoRepository<Book, String> {
     List<Book> findBySubject(String subject);
 
     List<Book> findByTitleContainingIgnoreCaseAndSubject(String keyword, String subject);
+
+    // US09：查詢同書名、同作者、指定狀態的書籍
+    List<Book> findByTitleAndAuthorAndStatus(String title, String author, String status);
+
+    // US10：查詢賣家的所有刊登, 管理自己刊登的書籍(包括下架)
+    List<Book> findBySellerName(String sellerName);
+    
+    // US07: 依照書籍狀態查詢
+    List<Book> findByStatus(String status);
 }
