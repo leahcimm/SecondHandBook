@@ -77,6 +77,26 @@ public class UserService {
         }
     }
 
+    // T06：程式啟動時確保有一個管理員帳號（2026-11-17 Michael 決定，帳號密碼在 application.properties）。
+    // 沒有這個 Email 就建一個；已經有（例如有人先用這個 Email 註冊）就改成管理員，密碼也改成設定檔的，
+    // 這樣登入頁顯示的帳號密碼一定能登入。回傳 true 代表這次新建了帳號。
+    public boolean ensureAdmin(String email, String password, String name, String contact) {
+        String normalized = normalizeEmail(email);
+        User user = userRepository.findByEmail(normalized).orElse(null);
+        boolean created = user == null;
+        if (created) {
+            user = new User();
+            user.setEmail(normalized);
+            user.setCreatedAt(LocalDateTime.now());
+        }
+        user.setName(name);
+        user.setContact(contact);
+        user.setRole(User.ROLE_ADMIN);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        userRepository.save(user);
+        return created;
+    }
+
     // Email 不分大小寫，前後空白也去掉；登入時也用同樣的方式比對
     public static String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);

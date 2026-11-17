@@ -118,4 +118,32 @@ class BookControllerTest {
         when(bookService.findBooks(any(), any(), any(), any())).thenReturn(List.of());
         mockMvc.perform(get("/api/books")).andExpect(status().isOk());
     }
+
+    // ===== T06 =====
+
+    @Test
+    void 我的刊登要登入_沒登入回401() throws Exception {
+        mockMvc.perform(get("/api/books/mine"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(bookService);
+    }
+
+    @Test
+    void 我的刊登_用登入者查() throws Exception {
+        when(bookService.findMyBooks(SELLER)).thenReturn(List.of(new Book()));
+        mockMvc.perform(get("/api/books/mine").with(user(new AccountDetails(SELLER, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void 單本書_把登入者傳給Service判斷能不能看() throws Exception {
+        when(bookService.getBookById(eq("b1"), eq(SELLER))).thenReturn(new Book());
+        mockMvc.perform(get("/api/books/b1").with(user(new AccountDetails(SELLER, null))))
+                .andExpect(status().isOk());
+        when(bookService.getBookById(eq("b1"), org.mockito.ArgumentMatchers.isNull()))
+                .thenThrow(new ntou.cs.secondhandbook.exception.ResourceNotFoundException("x"));
+        mockMvc.perform(get("/api/books/b1"))
+                .andExpect(status().isNotFound());
+    }
 }

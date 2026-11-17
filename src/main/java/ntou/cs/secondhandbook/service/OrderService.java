@@ -29,9 +29,8 @@ import java.util.Set;
 @Service
 public class OrderService {
 
-    // 可以下單的書籍狀態。
-    // 暫時也允許「待審核」，因為還沒有審核功能，目前所有書都是待審核。T06 做審核後改成只允許「上架中」。
-    static final Set<String> ORDERABLE_BOOK_STATUSES = Set.of(Book.STATUS_ON_SALE, Book.STATUS_PENDING);
+    // 可以下單的書籍狀態：只有管理員核准過的「上架中」（T06 收緊；T03 時暫時也允許「待審核」）
+    static final Set<String> ORDERABLE_BOOK_STATUSES = Set.of(Book.STATUS_ON_SALE);
 
     @Autowired
     private OrderRepository orderRepository;
@@ -56,6 +55,9 @@ public class OrderService {
 
         Set<String> sellers = new LinkedHashSet<>();
         for (Book book : books) {
+            if (Book.STATUS_PENDING.equals(book.getStatus()) || Book.STATUS_REJECTED.equals(book.getStatus())) {
+                throw new InvalidOrderException("《" + book.getTitle() + "》還沒通過審核，不能下單");
+            }
             if (!ORDERABLE_BOOK_STATUSES.contains(book.getStatus())) {
                 throw new InvalidOrderException("《" + book.getTitle() + "》已被保留或售出，不能下單");
             }

@@ -14,6 +14,7 @@ public class Book {
     public static final String STATUS_ON_SALE = "上架中";
     public static final String STATUS_RESERVED = "保留中"; // 賣家接受訂單後，其他人不能下單
     public static final String STATUS_SOLD = "已售出";     // 買家確認收到後
+    public static final String STATUS_REJECTED = "已退回"; // 管理員退回（US07），買家看不到，賣家看得到原因
 
     // 書況五級（由新到舊），刊登時必選一個；排序「依書況」也照這個順序
     public static final List<String> CONDITION_GRADES = List.of("全新", "近全新", "良好", "普通", "有缺損");
@@ -32,7 +33,9 @@ public class Book {
     private String sellerId;     // 賣家的使用者編號（T05），用來判斷誰是賣家；不放 Email，因為列表不用登入就看得到
     private String sellerName;   // 賣家姓名，刊登時從帳號帶入（T05），只拿來顯示
     private String sellerContact;// 賣家聯絡方式，刊登時從帳號帶入（T05）
-    private String status;       // 刊登狀態，預設「待審核」（US07 審核功能再改變）
+    private String status;       // 刊登狀態，預設「待審核」，管理員核准後「上架中」、退回後「已退回」（US07）
+    private String rejectReason; // 退回原因（US07），只有「已退回」的書有
+    private LocalDateTime reviewedAt; // 管理員核准或退回的時間
     private LocalDateTime createdAt;
 
     // Getters and setters for all fields
@@ -147,6 +150,22 @@ public class Book {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public void setRejectReason(String rejectReason) {
+        this.rejectReason = rejectReason;
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public void setReviewedAt(LocalDateTime reviewedAt) {
+        this.reviewedAt = reviewedAt;
     }
 
     public LocalDateTime getCreatedAt() {

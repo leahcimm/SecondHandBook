@@ -43,20 +43,22 @@ public class BookService {
     @Autowired
     private FileStorageService fileStorageService;
 
-    // US03：瀏覽書籍列表，可用書名關鍵字、科目、書況等級篩選（都可以不填），再依 sort 排序
+    // US03：瀏覽書籍列表，可用書名關鍵字、科目、書況等級篩選（都可以不填），再依 sort 排序。
+    // T06：只顯示「上架中」的書；待審核、已退回、保留中、已售出都不出現在列表
     public List<Book> findBooks(String keyword, String subject, String conditionGrade, String sort) {
         boolean hasKeyword = !isBlank(keyword);
         boolean hasSubject = !isBlank(subject);
+        String status = Book.STATUS_ON_SALE;
 
         List<Book> books;
         if (hasKeyword && hasSubject) {
-            books = repository.findByTitleContainingIgnoreCaseAndSubject(keyword.trim(), subject);
+            books = repository.findByStatusAndTitleContainingIgnoreCaseAndSubject(status, keyword.trim(), subject);
         } else if (hasKeyword) {
-            books = repository.findByTitleContainingIgnoreCase(keyword.trim());
+            books = repository.findByStatusAndTitleContainingIgnoreCase(status, keyword.trim());
         } else if (hasSubject) {
-            books = repository.findBySubject(subject);
+            books = repository.findByStatusAndSubject(status, subject);
         } else {
-            books = repository.findAll();
+            books = repository.findByStatus(status);
         }
 
         return books.stream()
@@ -65,9 +67,69 @@ public class BookService {
                 .toList();
     }
 
-    public Book getBookById(String id) {
-        return repository.findById(id)
+    // 看一本書。待審核、已退回的書還沒公開（US07），只有賣家本人和管理員看得到，其他人當作找不到。
+    // viewer 是 null 代表沒登入
+    public Book getBookById(String id, LoginUser viewer) {
+        Book book = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found with id " + id));
+        if (isHidden(book) && !canSeeHidden(book, viewer)) {
+            throw new ResourceNotFoundException("Book not found with id " + id);
+        }
+        return book;
+    }
+
+    // 我的刊登（T06）：賣家自己所有狀態的書，最新刊登的在前；已退回的書帶著退回原因（US07）
+    public List<Book> findMyBooks(LoginUser seller) {
+        return repository.findBySellerId(seller.id()).stream()
+                .sorted(NEWEST_FIRST)
+                .toList();
+    }
+
+    // ===== US07 審核書籍（只有管理員能呼叫，權限在 SecurityConfig 的 /api/admin/** 檢查） =====
+
+    // 待審核清單，先刊登的先審
+    public List<Book> findPendingBooks() {
+        return repository.findByStatus(Book.STATUS_PENDING).stream()
+                .sorted(NEWEST_FIRST.reversed())
+                .toList();
+    }
+
+    // 核准：待審核 → 上架中，買家就能在列表找到
+    public Book approve(String id) {
+        Book book = findPendingBook(id, "只有「待審核」的書可以核准");
+        book.setStatus(Book.STATUS_ON_SALE);
+        book.setRejectReason(null);
+        book.setReviewedAt(LocalDateTime.now());
+        return repository.save(book);
+    }
+
+    // 退回：待審核 → 已退回，一定要填原因（賣家在「我的刊登」看得到）；原因留白就擋下，狀態不變
+    public Book reject(String id, String reason) {
+        if (isBlank(reason)) {
+            throw new InvalidBookException("請填寫退回原因");
+        }
+        Book book = findPendingBook(id, "只有「待審核」的書可以退回");
+        book.setStatus(Book.STATUS_REJECTED);
+        book.setRejectReason(reason.trim());
+        book.setReviewedAt(LocalDateTime.now());
+        return repository.save(book);
+    }
+
+    private Book findPendingBook(String id, String wrongStatusMessage) {
+        Book book = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Book not found with id " + id));
+        if (!Book.STATUS_PENDING.equals(book.getStatus())) {
+            throw new InvalidBookException(wrongStatusMessage + "（這本書目前是「" + book.getStatus() + "」）");
+        }
+        return book;
+    }
+
+    private static boolean isHidden(Book book) {
+        return Book.STATUS_PENDING.equals(book.getStatus()) || Book.STATUS_REJECTED.equals(book.getStatus());
+    }
+
+    private static boolean canSeeHidden(Book book, LoginUser viewer) {
+        return viewer != null && (viewer.admin() || viewer.id().equals(book.getSellerId()));
     }
 
     // US02：刊登書籍。先檢查資料，全部通過才存照片與資料。賣家就是登入者（T05）

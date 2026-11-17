@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海大二手書交易平台｜審核書籍</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        .review-image { width: 160px; height: 160px; object-fit: cover; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<nav id="navbar"></nav>
+
+<!-- US07 審核書籍（T06）：管理員看待審核的書，核准或退回。退回一定要填原因。
+     只有管理員看得到這頁的資料；不是管理員時後端回 403，這裡顯示提示。 -->
+<div class="container" style="max-width: 900px;">
+    <h1 class="h3 mb-3">審核書籍</h1>
+    <p class="text-muted small">核准後書會變成「上架中」，出現在書籍列表。退回要填原因，賣家可以在「我的刊登」看到。</p>
+    <div id="message"></div>
+    <div id="bookList"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/common.js"></script>
+<script>
+    function renderBooks(books) {
+        const list = document.getElementById('bookList');
+        if (books.length === 0) {
+            list.innerHTML = '<div class="alert alert-secondary text-center" id="emptyBooks">目前沒有待審核的書籍</div>';
+            return;
+        }
+        list.innerHTML = books.map(book => `
+            <div class="card mb-3 review-card" data-id="${escapeHtml(book.id)}">
+                <div class="card-body d-flex flex-wrap gap-3">
+                    <img src="${escapeHtml(book.imageUrl)}" alt="書籍照片" class="review-image">
+                    <div class="flex-grow-1" style="min-width: 260px;">
+                        <h2 class="h5 mb-1">${escapeHtml(book.title)}</h2>
+                        <p class="mb-1 small">科目：${escapeHtml(book.subject)}${book.author ? `・作者：${escapeHtml(book.author)}` : ''}</p>
+                        <p class="mb-1 small">書況：${escapeHtml(book.conditionGrade)}${book.condition ? `（${escapeHtml(book.condition)}）` : '（沒有補充說明）'}</p>
+                        <p class="mb-1 small">售價：NT$ ${book.price}・${escapeHtml(deliveryText(book))}</p>
+                        <p class="mb-2 small text-muted">賣家：${escapeHtml(book.sellerName)}・刊登時間：${escapeHtml(formatTime(book.createdAt))}</p>
+                        <div class="d-flex flex-wrap gap-2 align-items-start">
+                            <button class="btn btn-success btn-sm approve-button" data-id="${escapeHtml(book.id)}">
+                                <i class="fas fa-check"></i> 核准</button>
+                            <div class="flex-grow-1">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control reject-reason-input" maxlength="200"
+                                           placeholder="退回原因（必填），例如：書況描述不足" aria-label="退回原因">
+                                    <button class="btn btn-outline-danger reject-button" data-id="${escapeHtml(book.id)}">
+                                        <i class="fas fa-times"></i> 退回</button>
+                                </div>
+                                <div class="invalid-feedback">請填寫退回原因</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`).join('');
+    }
+
+    async function loadBooks() {
+        const list = document.getElementById('bookList');
+        try {
+            renderBooks(await api('/api/admin/books'));
+        } catch (error) {
+            list.innerHTML = `<div class="alert alert-danger" id="loadError">無法載入待審核的書：${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    document.getElementById('bookList').addEventListener('click', async function (e) {
+        const approve = e.target.closest('.approve-button');
+        const reject = e.target.closest('.reject-button');
+        if (!approve && !reject) return;
+        const card = e.target.closest('.review-card');
+        const title = card.querySelector('h2').textContent;
+
+        if (approve) {
+            approve.disabled = true;
+            try {
+                await api(`/api/admin/books/${encodeURIComponent(approve.dataset.id)}/approve`, { method: 'POST' });
+                showAlert('message', 'success', `已核准《${title}》，書籍狀態改為「上架中」。`);
+            } catch (error) {
+                showAlert('message', 'danger', `核准失敗：${error.message}`);
+            }
+            loadBooks();
+            return;
+        }
+
+        // 退回：原因留白就提示補填，不送出（後端也會擋，狀態維持待審核）
+        const input = card.querySelector('.reject-reason-input');
+        const reason = input.value.trim();
+        if (!reason) {
+            input.classList.add('is-invalid');
+            card.querySelector('.invalid-feedback').style.display = 'block';
+            input.focus();
+            return;
+        }
+        reject.disabled = true;
+        try {
+            await api(`/api/admin/books/${encodeURIComponent(reject.dataset.id)}/reject`, {
+                method: 'POST',
+                body: JSON.stringify({ reason })
+            });
+            showAlert('message', 'success', `已退回《${title}》，原因：${reason}`);
+        } catch (error) {
+            showAlert('message', 'danger', `退回失敗：${error.message}`);
+        }
+        loadBooks();
+    });
+
+    document.getElementById('bookList').addEventListener('input', function (e) {
+        if (e.target.classList.contains('reject-reason-input')) {
+            e.target.classList.remove('is-invalid');
+            e.target.closest('.review-card').querySelector('.invalid-feedback').style.display = '';
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        const user = await renderNavbar();
+        if (!user) {
+            goLogin();
+            return;
+        }
+        if (!user.admin) {
+            document.getElementById('bookList').innerHTML =
+                '<div class="alert alert-warning" id="notAdmin">只有管理員可以審核書籍。</div>';
+            return;
+        }
+        loadBooks();
+    });
+</script>
+</body>
+</html>

@@ -58,7 +58,8 @@ function escapeHtml(text) {
 
 // ===== 共用導覽列和登入者 =====
 // 每一頁放 <nav id="navbar"></nav>，再 await renderNavbar()，拿到登入者（沒登入是 null）。
-// 登入者的資料是 {id, name, email, contact}，從後端 GET /api/auth/me 取得（T05）。
+// 登入者的資料是 {id, name, email, contact, admin}，從後端 GET /api/auth/me 取得（T05）。
+// admin 是 true 時導覽列多一個「審核書籍」（T06）；只是決定要不要顯示，真正的權限由後端檢查。
 let currentUser = null;
 
 async function renderNavbar() {
@@ -73,6 +74,7 @@ async function renderNavbar() {
                 <a class="btn btn-light btn-sm" href="cart.html"><i class="fas fa-shopping-cart"></i> 購物車
                     <span class="badge bg-danger" id="cartCount"></span></a>
                 <a class="btn btn-light btn-sm" href="orders.html"><i class="fas fa-receipt"></i> 我的訂單</a>
+                <a class="btn btn-light btn-sm" href="my-books.html"><i class="fas fa-book-open"></i> 我的刊登</a>
                 <span class="d-flex align-items-center gap-2" id="userArea"></span>
             </div>
         </div>`;
@@ -81,6 +83,7 @@ async function renderNavbar() {
     const userArea = document.getElementById('userArea');
     if (currentUser) {
         userArea.innerHTML = `
+            ${currentUser.admin ? '<a class="btn btn-warning btn-sm" href="admin.html" id="adminLink"><i class="fas fa-user-shield"></i> 審核書籍</a>' : ''}
             <span class="text-white" id="loginUserName"><i class="fas fa-user"></i> ${escapeHtml(currentUser.name)}</span>
             <button class="btn btn-outline-light btn-sm" id="logoutButton"><i class="fas fa-sign-out-alt"></i> 登出</button>`;
         document.getElementById('logoutButton').addEventListener('click', logout);
@@ -185,8 +188,21 @@ function updateCartCount() {
     }
 }
 
-// 書籍狀態：只有這兩種可以加入購物車（T06 審核做完後改成只有「上架中」）
-const ORDERABLE_BOOK_STATUSES = ['上架中', '待審核'];
+// 書籍狀態：只有管理員核准過的「上架中」可以加入購物車（T06，和後端 OrderService 一致）
+const ORDERABLE_BOOK_STATUSES = ['上架中'];
+
+// 書籍狀態的標籤顏色（我的刊登、審核頁用）
+const BOOK_STATUS_BADGE = {
+    '待審核': 'bg-warning text-dark',
+    '上架中': 'bg-success',
+    '已退回': 'bg-danger',
+    '保留中': 'bg-info text-dark',
+    '已售出': 'bg-secondary'
+};
+
+function formatTime(time) {
+    return time ? time.replace('T', ' ').substring(0, 16) : '';
+}
 
 function showAlert(containerId, type, message) {
     document.getElementById(containerId).innerHTML =

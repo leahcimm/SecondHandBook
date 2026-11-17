@@ -244,11 +244,23 @@ class OrderServiceTest {
                 () -> orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")));
     }
 
+    // T06：只有管理員核准過的「上架中」書能下單
     @Test
-    void 待審核的書_暫時也可以下單_T06再收緊() {
+    void 待審核的書_不能下單() {
         book("a1", SELLER_A, 200, null).setStatus(Book.STATUS_PENDING);
-        Order order = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1"));
-        assertEquals(Order.STATUS_WAITING_SELLER, order.getStatus());
+        InvalidOrderException ex = assertThrows(InvalidOrderException.class,
+                () -> orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")));
+        assertEquals("《書a1》還沒通過審核，不能下單", ex.getMessage());
+        assertTrue(orderDb.isEmpty());
+    }
+
+    @Test
+    void 已退回的書_不能下單() {
+        book("a1", SELLER_A, 200, null).setStatus(Book.STATUS_REJECTED);
+        InvalidOrderException ex = assertThrows(InvalidOrderException.class,
+                () -> orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")));
+        assertEquals("《書a1》還沒通過審核，不能下單", ex.getMessage());
+        assertTrue(orderDb.isEmpty());
     }
 
     // ===== US05 處理訂單 =====
@@ -439,18 +451,6 @@ class OrderServiceTest {
 
         assertEquals(Order.STATUS_CANCELLED, order.getStatus());
         assertEquals(Book.STATUS_ON_SALE, bookStatus("a1"));
-    }
-
-    @Test
-    void 待審核的書被接受後取消_回到待審核_不會跳過審核() {
-        book("a1", SELLER_A, 200, null).setStatus(Book.STATUS_PENDING);
-        String id = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
-        orderService.accept(SELLER_A, id);
-        assertEquals(Book.STATUS_RESERVED, bookStatus("a1"));
-
-        orderService.cancel(BUYER, id);
-
-        assertEquals(Book.STATUS_PENDING, bookStatus("a1"));
     }
 
     @Test

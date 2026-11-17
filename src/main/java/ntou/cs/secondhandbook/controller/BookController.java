@@ -31,9 +31,16 @@ public class BookController {
         return bookService.findBooks(keyword, subject, conditionGrade, sort);
     }
 
+    // 我的刊登（T06）：GET /api/books/mine，要登入（SecurityConfig），回自己所有狀態的書和退回原因
+    @GetMapping("/mine")
+    public List<Book> getMyBooks() {
+        return bookService.findMyBooks(currentUser.get());
+    }
+
+    // 待審核、已退回的書只有賣家本人和管理員看得到，其他人回 404（T06）
     @GetMapping("/{id}")
     public ResponseEntity<Book> getBookById(@PathVariable String id) {
-        return ResponseEntity.ok(bookService.getBookById(id));
+        return ResponseEntity.ok(bookService.getBookById(id, currentUser.getOrNull()));
     }
 
     // US02：POST /api/books，用 multipart/form-data 送出表單與照片，欄位對應 BookForm。要登入，賣家就是登入者

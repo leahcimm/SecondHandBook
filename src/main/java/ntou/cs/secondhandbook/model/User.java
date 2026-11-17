@@ -18,7 +18,22 @@ public class User {
     private String email;         // 學校 Email，存小寫
     private String passwordHash;  // BCrypt 雜湊，資料庫裡不會有明碼
     private String contact;       // 聯絡方式，刊登書籍時當作賣家聯絡方式
+    private String role;          // 角色（T06）："ADMIN" 是管理員；一般使用者是 null。只在後端設定，註冊不能指定
     private LocalDateTime createdAt;
+
+    public static final String ROLE_ADMIN = "ADMIN";
+
+    public boolean isAdmin() {
+        return ROLE_ADMIN.equals(role);
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
 
     public String getId() {
         return id;

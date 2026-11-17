@@ -66,10 +66,6 @@
         return '';
     }
 
-    function formatTime(time) {
-        return time ? time.replace('T', ' ').substring(0, 16) : '';
-    }
-
     function renderOrders(orders) {
         const list = document.getElementById('orderList');
         if (orders.length === 0) {

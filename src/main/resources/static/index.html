@@ -152,7 +152,8 @@
         });
     }
 
-    // 卡片下方的按鈕：保留中、已售出的書不能買；自己的書也不顯示購買按鈕（US05 測試方法）
+    // 卡片下方的按鈕：自己的書不顯示購買按鈕（US05 測試方法）。
+    // T06 起列表只會有「上架中」的書；保留中、已售出的判斷留著，以防單本書的資料比列表新
     function cartButton(book) {
         if (book.status === '保留中') return '<span class="text-muted"><i class="fas fa-lock"></i> 已保留，暫時不能購買</span>';
         if (book.status === '已售出') return '<span class="text-muted"><i class="fas fa-check"></i> 已售出</span>';
@@ -203,14 +204,6 @@
         await renderNavbar();
         fillSubjectOptions(document.getElementById('subject'));
         fillConditionOptions(document.getElementById('conditionGrade'), false);
-
-        // 從刊登頁成功跳轉過來時，顯示成功訊息
-        if (new URLSearchParams(window.location.search).get('posted') === '1') {
-            document.getElementById('message').innerHTML =
-                '<div class="alert alert-success alert-dismissible fade show" id="successMessage">刊登成功！書籍狀態為「待審核」。' +
-                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
-            history.replaceState(null, '', 'index.html');
-        }
 
         fetchBooks();
     });

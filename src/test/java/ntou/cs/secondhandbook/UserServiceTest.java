@@ -141,4 +141,49 @@ class UserServiceTest {
         longPassword.setPassword("a".repeat(73));
         assertRejected(longPassword, "密碼太長，請在 72 個英數字元以內");
     }
+
+    // ===== T06 管理員帳號 =====
+
+    @Test
+    void 註冊的帳號都不是管理員() {
+        when(userRepository.existsByEmail(any())).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        LoginUser user = userService.register(form("01157009@mail.ntou.edu.tw"));
+
+        assertFalse(user.admin());
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertNull(saved.getValue().getRole());
+    }
+
+    @Test
+    void 啟動時沒有管理員帳號_建立一個() {
+        when(userRepository.findByEmail("admin@mail.ntou.edu.tw")).thenReturn(java.util.Optional.empty());
+
+        assertTrue(userService.ensureAdmin("Admin@mail.ntou.edu.tw", "admin12345", "系統管理員", "平台管理員"));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        User admin = saved.getValue();
+        assertEquals("admin@mail.ntou.edu.tw", admin.getEmail());
+        assertTrue(admin.isAdmin());
+        assertTrue(passwordEncoder.matches("admin12345", admin.getPasswordHash()));
+        assertTrue(LoginUser.from(admin).admin());
+    }
+
+    @Test
+    void 啟動時已有這個Email_改成管理員_密碼改成設定檔的() {
+        User existing = new User();
+        existing.setId("u9");
+        existing.setEmail("admin@mail.ntou.edu.tw");
+        existing.setPasswordHash(passwordEncoder.encode("someoneElse1"));
+        when(userRepository.findByEmail("admin@mail.ntou.edu.tw")).thenReturn(java.util.Optional.of(existing));
+
+        assertFalse(userService.ensureAdmin("admin@mail.ntou.edu.tw", "admin12345", "系統管理員", "平台管理員"));
+
+        assertTrue(existing.isAdmin());
+        assertTrue(passwordEncoder.matches("admin12345", existing.getPasswordHash()));
+        verify(userRepository).save(existing);
+    }
 }

@@ -14,10 +14,19 @@ import org.springframework.stereotype.Component;
 public class CurrentUser {
 
     public LoginUser get() {
+        LoginUser user = getOrNull();
+        if (user == null) {
+            throw new MissingUserException("請先登入");
+        }
+        return user;
+    }
+
+    // 不用登入的 API 用這個：沒登入回 null（例如看一本書，賣家本人可以看自己待審核的書，T06）
+    public LoginUser getOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof AccountDetails details) {
             return details.getLoginUser();
         }
-        throw new MissingUserException("請先登入");
+        return null;
     }
 }

@@ -147,4 +147,24 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("請先登入"));
     }
+
+    // ===== T06 =====
+
+    @Test
+    void 登入頁的展示用管理員帳號_不用登入就拿得到() throws Exception {
+        mockMvc.perform(get("/api/auth/demo-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("admin@mail.ntou.edu.tw"))
+                .andExpect(jsonPath("$.password").value("admin12345"));
+    }
+
+    @Test
+    void 管理員登入後_me回admin為true() throws Exception {
+        LoginUser admin = new LoginUser("a1", "系統管理員", "admin@mail.ntou.edu.tw", "平台管理員", true);
+        mockMvc.perform(get("/api/auth/me").with(
+                        org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
+                                .user(new ntou.cs.secondhandbook.service.AccountDetails(admin, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.admin").value(true));
+    }
 }

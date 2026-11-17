@@ -18,6 +18,7 @@
 
 <div class="container" style="max-width: 720px;">
     <h1 class="h3 mb-3">刊登書籍</h1>
+    <p class="text-muted small" id="reviewNotice"><i class="fas fa-info-circle"></i> 刊登後要等管理員審核通過，書才會出現在書籍列表。審核結果可以在「我的刊登」查看。</p>
     <div id="serverError"></div>
 
     <form id="bookForm" novalidate>
@@ -182,7 +183,8 @@
             body: formData
         })
             .then(() => {
-                window.location.href = 'index.html?posted=1';
+                // 刊登後要等管理員核准才會出現在列表（US07），所以帶去「我的刊登」看狀態
+                window.location.href = 'my-books.html?posted=1';
             })
             .catch(error => {
                 console.error('Error:', error);

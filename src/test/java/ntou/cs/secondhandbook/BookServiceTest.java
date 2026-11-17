@@ -1,6 +1,7 @@
 package ntou.cs.secondhandbook;
 
 import ntou.cs.secondhandbook.exception.InvalidBookException;
+import ntou.cs.secondhandbook.exception.ResourceNotFoundException;
 import ntou.cs.secondhandbook.model.Book;
 import ntou.cs.secondhandbook.model.BookForm;
 import ntou.cs.secondhandbook.model.LoginUser;
@@ -208,21 +209,31 @@ class BookServiceTest {
 
     // ===== US03 尋找書籍 =====
 
+    // T06：列表只查「上架中」的書（待審核、已退回、保留中、已售出都不顯示）
     @Test
-    void 列表_沒有條件時列出全部() {
+    void 列表_沒有條件時列出全部上架中的書() {
         bookService.findBooks(null, "", null, null);
-        verify(repository).findAll();
+        verify(repository).findByStatus("上架中");
     }
 
     @Test
-    void 列表_用關鍵字和科目篩選() {
+    void 列表_用關鍵字和科目篩選_只查上架中() {
         bookService.findBooks(" 資料 ", "資料結構", null, null);
-        verify(repository).findByTitleContainingIgnoreCaseAndSubject("資料", "資料結構");
+        verify(repository).findByStatusAndTitleContainingIgnoreCaseAndSubject("上架中", "資料", "資料結構");
+    }
+
+    @Test
+    void 列表_只用關鍵字或只用科目_也只查上架中() {
+        bookService.findBooks("資料", null, null, null);
+        verify(repository).findByStatusAndTitleContainingIgnoreCase("上架中", "資料");
+        bookService.findBooks(null, "微積分", null, null);
+        verify(repository).findByStatusAndSubject("上架中", "微積分");
+        verify(repository, never()).findAll();
     }
 
     @Test
     void 三位賣家賣同一本書_預設依價格由低到高() {
-        when(repository.findByTitleContainingIgnoreCase("資料結構")).thenReturn(List.of(
+        when(repository.findByStatusAndTitleContainingIgnoreCase("上架中", "資料結構")).thenReturn(List.of(
                 book("資料結構", 300, "全新", 1),
                 book("資料結構", 200, "普通", 2),
                 book("資料結構", 250, "良好", 3)));
@@ -234,7 +245,7 @@ class BookServiceTest {
 
     @Test
     void 列表_依最新刊登排序() {
-        when(repository.findAll()).thenReturn(List.of(
+        when(repository.findByStatus("上架中")).thenReturn(List.of(
                 book("A", 300, "全新", 3),
                 book("B", 200, "普通", 1),
                 book("C", 250, "良好", 2)));
@@ -246,7 +257,7 @@ class BookServiceTest {
 
     @Test
     void 列表_依書況排序_同等級再比價格_沒有等級的舊資料排最後() {
-        when(repository.findAll()).thenReturn(List.of(
+        when(repository.findByStatus("上架中")).thenReturn(List.of(
                 book("舊資料", 100, null, 1),
                 book("普通", 150, "普通", 1),
                 book("良好貴", 300, "良好", 1),
@@ -261,7 +272,7 @@ class BookServiceTest {
 
     @Test
     void 列表_依書況等級篩選() {
-        when(repository.findAll()).thenReturn(List.of(
+        when(repository.findByStatus("上架中")).thenReturn(List.of(
                 book("A", 300, "全新", 1),
                 book("B", 200, "良好", 1),
                 book("C", 250, "良好", 1)));
@@ -269,5 +280,119 @@ class BookServiceTest {
         List<Book> result = bookService.findBooks(null, null, "良好", null);
 
         assertEquals(List.of("B", "C"), result.stream().map(Book::getTitle).toList());
+    }
+
+    // ===== US07 審核書籍（T06） =====
+
+    private static final LoginUser ADMIN = new LoginUser("admin", "系統管理員", "admin@mail.ntou.edu.tw", "平台管理員", true);
+    private static final LoginUser BUYER = new LoginUser("u1", "小美", "u1@mail.ntou.edu.tw", "IG 小美");
+
+    private Book stored(String id, String status) {
+        Book b = book("資料結構", 250, "良好", 1);
+        b.setId(id);
+        b.setSellerId(SELLER.id());
+        b.setStatus(status);
+        lenient().when(repository.findById(id)).thenReturn(java.util.Optional.of(b));
+        lenient().when(repository.save(any(Book.class))).thenAnswer(inv -> inv.getArgument(0));
+        return b;
+    }
+
+    @Test
+    void 核准待審核書籍_狀態改為上架中_買家能在清單中找到() {
+        stored("b1", "待審核");
+
+        Book approved = bookService.approve("b1");
+
+        assertEquals("上架中", approved.getStatus());
+        assertNotNull(approved.getReviewedAt());
+        verify(repository).save(approved);
+        // 列表查的就是「上架中」，所以核准後買家找得到（列表的查詢見上面 US03 的測試）
+        when(repository.findByStatus("上架中")).thenReturn(List.of(approved));
+        assertEquals(List.of(approved), bookService.findBooks(null, null, null, null));
+    }
+
+    @Test
+    void 輸入原因後退回_狀態已退回_買家看不到_賣家看得到原因() {
+        stored("b1", "待審核");
+
+        Book rejected = bookService.reject("b1", " 書況描述不足 ");
+
+        assertEquals("已退回", rejected.getStatus());
+        assertEquals("書況描述不足", rejected.getRejectReason());
+        // 買家：列表只查上架中，單本也查不到
+        verify(repository, never()).findBySellerId(any());
+        assertThrows(ResourceNotFoundException.class, () -> bookService.getBookById("b1", BUYER));
+        assertThrows(ResourceNotFoundException.class, () -> bookService.getBookById("b1", null));
+        // 賣家：我的刊登看得到，含原因
+        when(repository.findBySellerId(SELLER.id())).thenReturn(List.of(rejected));
+        List<Book> mine = bookService.findMyBooks(SELLER);
+        assertEquals("書況描述不足", mine.get(0).getRejectReason());
+        assertEquals(rejected, bookService.getBookById("b1", SELLER));
+    }
+
+    @Test
+    void 原因留白就退回_要求補填_狀態維持待審核() {
+        Book b = stored("b1", "待審核");
+
+        for (String reason : new String[]{null, "", "   "}) {
+            InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.reject("b1", reason));
+            assertEquals("請填寫退回原因", ex.getMessage());
+        }
+        assertEquals("待審核", b.getStatus());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void 只有待審核的書能核准或退回() {
+        for (String status : new String[]{"上架中", "已退回", "保留中", "已售出"}) {
+            Book b = stored("b1", status);
+            assertThrows(InvalidBookException.class, () -> bookService.approve("b1"));
+            assertThrows(InvalidBookException.class, () -> bookService.reject("b1", "原因"));
+            assertEquals(status, b.getStatus());
+        }
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void 核准或退回找不到的書_回找不到() {
+        when(repository.findById("nope")).thenReturn(java.util.Optional.empty());
+        assertThrows(ResourceNotFoundException.class, () -> bookService.approve("nope"));
+        assertThrows(ResourceNotFoundException.class, () -> bookService.reject("nope", "原因"));
+    }
+
+    @Test
+    void 待審核清單_先刊登的在前() {
+        Book older = book("舊", 100, "良好", 3);
+        Book newer = book("新", 100, "良好", 1);
+        when(repository.findByStatus("待審核")).thenReturn(List.of(newer, older));
+
+        assertEquals(List.of("舊", "新"), bookService.findPendingBooks().stream().map(Book::getTitle).toList());
+    }
+
+    @Test
+    void 待審核的書_只有賣家本人和管理員看得到單本() {
+        Book b = stored("b1", "待審核");
+
+        assertEquals(b, bookService.getBookById("b1", SELLER));
+        assertEquals(b, bookService.getBookById("b1", ADMIN));
+        assertThrows(ResourceNotFoundException.class, () -> bookService.getBookById("b1", BUYER));
+        assertThrows(ResourceNotFoundException.class, () -> bookService.getBookById("b1", null));
+    }
+
+    @Test
+    void 上架中的書_沒登入也看得到單本() {
+        Book b = stored("b1", "上架中");
+        assertEquals(b, bookService.getBookById("b1", null));
+    }
+
+    @Test
+    void 我的刊登_最新的在前_所有狀態都有() {
+        Book pending = book("待審", 100, "良好", 1);
+        pending.setStatus("待審核");
+        Book sold = book("賣掉", 100, "良好", 5);
+        sold.setStatus("已售出");
+        when(repository.findBySellerId(SELLER.id())).thenReturn(List.of(sold, pending));
+
+        assertEquals(List.of("待審", "賣掉"), bookService.findMyBooks(SELLER).stream().map(Book::getTitle).toList());
     }
 }
