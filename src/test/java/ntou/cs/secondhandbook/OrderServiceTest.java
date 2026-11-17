@@ -230,6 +230,7 @@ class OrderServiceTest {
 
         assertEquals(Order.STATUS_TO_DELIVER, order.getStatus());
         assertEquals(Book.STATUS_RESERVED, bookStatus("a1"));
+        verify(bookRepository).saveAll(any()); // 書的新狀態有存回資料庫
         InvalidOrderException ex = assertThrows(InvalidOrderException.class,
                 () -> orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")));
         assertEquals("《書a1》已被保留或售出，不能下單", ex.getMessage());
@@ -314,6 +315,7 @@ class OrderServiceTest {
 
         assertEquals(Order.STATUS_COMPLETED, order.getStatus());
         assertEquals(Book.STATUS_SOLD, bookStatus("a1"));
+        verify(bookRepository, times(2)).saveAll(any()); // 接受一次、確認一次
     }
 
     @Test
@@ -344,6 +346,7 @@ class OrderServiceTest {
 
         assertEquals(Order.STATUS_CANCELLED, order.getStatus());
         assertEquals(Book.STATUS_ON_SALE, bookStatus("a1"));
+        verify(bookRepository, times(2)).saveAll(any()); // 接受一次、取消還原一次
     }
 
     @Test
