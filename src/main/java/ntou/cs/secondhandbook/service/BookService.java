@@ -4,6 +4,7 @@ import ntou.cs.secondhandbook.exception.InvalidBookException;
 import ntou.cs.secondhandbook.exception.ResourceNotFoundException;
 import ntou.cs.secondhandbook.model.Book;
 import ntou.cs.secondhandbook.model.BookForm;
+import ntou.cs.secondhandbook.model.LoginUser;
 import ntou.cs.secondhandbook.repository.BookRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -69,8 +70,8 @@ public class BookService {
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found with id " + id));
     }
 
-    // US02：刊登書籍。先檢查資料，全部通過才存照片與資料
-    public Book addBook(BookForm form) throws IOException {
+    // US02：刊登書籍。先檢查資料，全部通過才存照片與資料。賣家就是登入者（T05）
+    public Book addBook(BookForm form, LoginUser seller) throws IOException {
         if (isBlank(form.getTitle())) {
             throw new InvalidBookException("請填寫書名");
         }
@@ -103,8 +104,9 @@ public class BookService {
         book.setShippable(form.isShippable());
         book.setShippingFee(shippingFee);
         book.setImageUrl("/uploads/" + fileName);
-        book.setSellerName(trimToNull(form.getSellerName()));
-        book.setSellerContact(trimToNull(form.getSellerContact()));
+        book.setSellerId(seller.id());
+        book.setSellerName(seller.name());
+        book.setSellerContact(seller.contact());
         book.setStatus(Book.STATUS_PENDING);
         book.setCreatedAt(LocalDateTime.now());
 

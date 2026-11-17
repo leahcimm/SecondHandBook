@@ -45,6 +45,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(403).body(Map.of("message", ex.getMessage()));
     }
 
+    // ===== 帳號 =====
+
+    @ExceptionHandler(InvalidUserException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidUser(InvalidUserException ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler(MissingUserException.class)
     public ResponseEntity<Map<String, String>> handleMissingUser(MissingUserException ex) {
         return ResponseEntity.status(401).body(Map.of("message", ex.getMessage()));

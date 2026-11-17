@@ -18,6 +18,9 @@ public class BookController {
     @Autowired
     private BookService bookService;
 
+    @Autowired
+    private CurrentUser currentUser;
+
     // US03：GET /api/books?keyword=資料&subject=資料結構&conditionGrade=良好&sort=price（參數都可省略）
     // sort：price 價格低到高（預設）、newest 最新刊登、condition 書況由新到舊
     @GetMapping
@@ -33,10 +36,10 @@ public class BookController {
         return ResponseEntity.ok(bookService.getBookById(id));
     }
 
-    // US02：POST /api/books，用 multipart/form-data 送出表單與照片，欄位對應 BookForm
+    // US02：POST /api/books，用 multipart/form-data 送出表單與照片，欄位對應 BookForm。要登入，賣家就是登入者
     @PostMapping
     public ResponseEntity<Book> addBook(@ModelAttribute BookForm form) throws IOException {
-        Book newBook = bookService.addBook(form);
+        Book newBook = bookService.addBook(form, currentUser.get());
         return ResponseEntity.status(HttpStatus.CREATED).body(newBook);
     }
 }

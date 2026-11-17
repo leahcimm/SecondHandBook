@@ -29,8 +29,9 @@ public class Book {
     private boolean shippable;   // 是否可寄送；校內面交一律可以，不用另外存
     private Integer shippingFee; // 運費，0 以上的整數；不可寄送時為 null
     private String imageUrl;     // 照片網址（必填）
-    private String sellerName;   // 賣家稱呼，Iteration 1 還沒有登入，先手動填
-    private String sellerContact;// 賣家聯絡方式
+    private String sellerId;     // 賣家的使用者編號（T05），用來判斷誰是賣家；不放 Email，因為列表不用登入就看得到
+    private String sellerName;   // 賣家姓名，刊登時從帳號帶入（T05），只拿來顯示
+    private String sellerContact;// 賣家聯絡方式，刊登時從帳號帶入（T05）
     private String status;       // 刊登狀態，預設「待審核」（US07 審核功能再改變）
     private LocalDateTime createdAt;
 
@@ -114,6 +115,14 @@ public class Book {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getSellerId() {
+        return sellerId;
+    }
+
+    public void setSellerId(String sellerId) {
+        this.sellerId = sellerId;
     }
 
     public String getSellerName() {

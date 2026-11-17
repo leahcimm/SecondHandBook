@@ -11,9 +11,10 @@ import java.util.List;
 public interface OrderRepository extends MongoRepository<Order, String> {
 
     // 買家看自己送出的訂單、賣家看自己收到的訂單，新的在前
-    List<Order> findByBuyerNameOrderByCreatedAtDesc(String buyerName);
+    // 用使用者編號查（T05），姓名可能重複
+    List<Order> findByBuyerIdOrderByCreatedAtDesc(String buyerId);
 
-    List<Order> findBySellerNameOrderByCreatedAtDesc(String sellerName);
+    List<Order> findBySellerIdOrderByCreatedAtDesc(String sellerId);
 
     // 某個狀態、而且含有其中任一本書的訂單（查 items.bookId）。T11 接受訂單時用來找同一本書的其他訂單
     List<Order> findByStatusAndItemsBookIdIn(String status, Collection<String> bookIds);

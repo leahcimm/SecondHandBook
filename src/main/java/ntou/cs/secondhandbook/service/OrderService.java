@@ -5,6 +5,7 @@ import ntou.cs.secondhandbook.exception.InvalidOrderException;
 import ntou.cs.secondhandbook.exception.OrderNotFoundException;
 import ntou.cs.secondhandbook.exception.ResourceNotFoundException;
 import ntou.cs.secondhandbook.model.Book;
+import ntou.cs.secondhandbook.model.LoginUser;
 import ntou.cs.secondhandbook.model.Order;
 import ntou.cs.secondhandbook.model.OrderForm;
 import ntou.cs.secondhandbook.model.OrderItem;
@@ -24,6 +25,7 @@ import java.util.Set;
 // 訂單狀態和書籍狀態要一起變，見需求文件第 6 章。
 // 注意：「待賣家回覆」時書籍狀態還沒變，只有賣家接受才把書改成「保留中」。
 // 所以拒絕、取消待賣家回覆的訂單都不動書；只有取消「待交付」的訂單才把書還原。
+// 誰是買家、賣家用使用者編號判斷（T05），姓名只拿來顯示。
 @Service
 public class OrderService {
 
@@ -39,7 +41,7 @@ public class OrderService {
 
     // ===== US04 送出訂單 =====
 
-    public Order createOrder(String buyerName, OrderForm form) {
+    public Order createOrder(LoginUser buyer, OrderForm form) {
         List<String> bookIds = form.getBookIds() == null ? List.of()
                 : form.getBookIds().stream().filter(Objects::nonNull).distinct().toList();
         if (bookIds.isEmpty()) {
@@ -57,16 +59,16 @@ public class OrderService {
             if (!ORDERABLE_BOOK_STATUSES.contains(book.getStatus())) {
                 throw new InvalidOrderException("《" + book.getTitle() + "》已被保留或售出，不能下單");
             }
-            if (isBlank(book.getSellerName())) {
+            if (isBlank(book.getSellerId())) {
                 throw new InvalidOrderException("《" + book.getTitle() + "》沒有賣家資料，不能下單");
             }
-            sellers.add(book.getSellerName());
+            sellers.add(book.getSellerId());
         }
         if (sellers.size() > 1) {
             throw new InvalidOrderException("一筆訂單只能包含同一位賣家的書，請分開送出");
         }
-        String sellerName = sellers.iterator().next();
-        if (sellerName.equals(buyerName)) {
+        String sellerId = sellers.iterator().next();
+        if (sellerId.equals(buyer.id())) {
             throw new InvalidOrderException("不能購買自己刊登的書");
         }
 
@@ -83,8 +85,10 @@ public class OrderService {
         int bookTotal = books.stream().mapToInt(Book::getPrice).sum();
 
         Order order = new Order();
-        order.setBuyerName(buyerName);
-        order.setSellerName(sellerName);
+        order.setBuyerId(buyer.id());
+        order.setBuyerName(buyer.name());
+        order.setSellerId(sellerId);
+        order.setSellerName(books.get(0).getSellerName());
         order.setItems(new ArrayList<>(books.stream().map(OrderItem::new).toList()));
         order.setDeliveryMethod(delivery);
         order.setShippingFee(shippingFee);
@@ -98,18 +102,18 @@ public class OrderService {
 
     // ===== 查詢 =====
 
-    public List<Order> findOrdersAsBuyer(String userName) {
-        return orderRepository.findByBuyerNameOrderByCreatedAtDesc(userName);
+    public List<Order> findOrdersAsBuyer(LoginUser user) {
+        return orderRepository.findByBuyerIdOrderByCreatedAtDesc(user.id());
     }
 
-    public List<Order> findOrdersAsSeller(String userName) {
-        return orderRepository.findBySellerNameOrderByCreatedAtDesc(userName);
+    public List<Order> findOrdersAsSeller(LoginUser user) {
+        return orderRepository.findBySellerIdOrderByCreatedAtDesc(user.id());
     }
 
     // 只有這筆訂單的買家或賣家看得到
-    public Order getOrder(String userName, String orderId) {
+    public Order getOrder(LoginUser user, String orderId) {
         Order order = findOrder(orderId);
-        if (!userName.equals(order.getBuyerName()) && !userName.equals(order.getSellerName())) {
+        if (!isBuyer(order, user) && !isSeller(order, user)) {
             throw new ForbiddenOperationException("你不是這筆訂單的買家或賣家");
         }
         return order;
@@ -119,9 +123,9 @@ public class OrderService {
 
     // 接受：訂單 → 待交付，書 → 保留中。接受前再確認一次書還能賣（可能已經接受了別人的訂單）
     // 接受後，含有同一本書的其他「待賣家回覆」訂單自動拒絕（T11，2026-11-17 Michael 決定）
-    public Order accept(String userName, String orderId) {
+    public Order accept(LoginUser user, String orderId) {
         Order order = findOrder(orderId);
-        requireSeller(order, userName, "只有這筆訂單的賣家可以接受訂單");
+        requireSeller(order, user, "只有這筆訂單的賣家可以接受訂單");
         requireStatus(order, Order.STATUS_WAITING_SELLER, "只有「待賣家回覆」的訂單可以接受");
 
         List<Book> books = order.getItems().stream().map(item -> findBook(item.getBookId())).toList();
@@ -162,9 +166,9 @@ public class OrderService {
     }
 
     // 拒絕：訂單 → 已拒絕。書在待賣家回覆時沒被保留，所以不用動
-    public Order reject(String userName, String orderId) {
+    public Order reject(LoginUser user, String orderId) {
         Order order = findOrder(orderId);
-        requireSeller(order, userName, "只有這筆訂單的賣家可以拒絕訂單");
+        requireSeller(order, user, "只有這筆訂單的賣家可以拒絕訂單");
         requireStatus(order, Order.STATUS_WAITING_SELLER, "只有「待賣家回覆」的訂單可以拒絕");
         return changeStatus(order, Order.STATUS_REJECTED);
     }
@@ -172,9 +176,9 @@ public class OrderService {
     // ===== US11 確認收書、取消訂單 =====
 
     // 確認收到（只有買家）：訂單 → 已完成，書 → 已售出
-    public Order confirmReceived(String userName, String orderId) {
+    public Order confirmReceived(LoginUser user, String orderId) {
         Order order = findOrder(orderId);
-        if (!userName.equals(order.getBuyerName())) {
+        if (!isBuyer(order, user)) {
             throw new ForbiddenOperationException("只有這筆訂單的買家可以確認收到");
         }
         requireStatus(order, Order.STATUS_TO_DELIVER, "只有「待交付」的訂單可以確認收到");
@@ -184,9 +188,9 @@ public class OrderService {
 
     // 取消（買家或賣家，交付前）：訂單 → 已取消。
     // 待交付的訂單書已被保留，要還原成接受前的狀態（原本待審核就回待審核，不會跳過審核）
-    public Order cancel(String userName, String orderId) {
+    public Order cancel(LoginUser user, String orderId) {
         Order order = findOrder(orderId);
-        if (!userName.equals(order.getBuyerName()) && !userName.equals(order.getSellerName())) {
+        if (!isBuyer(order, user) && !isSeller(order, user)) {
             throw new ForbiddenOperationException("只有這筆訂單的買家或賣家可以取消訂單");
         }
         String status = order.getStatus();
@@ -211,8 +215,16 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Book not found with id " + bookId));
     }
 
-    private static void requireSeller(Order order, String userName, String message) {
-        if (!userName.equals(order.getSellerName())) {
+    private static boolean isBuyer(Order order, LoginUser user) {
+        return user.id().equals(order.getBuyerId());
+    }
+
+    private static boolean isSeller(Order order, LoginUser user) {
+        return user.id().equals(order.getSellerId());
+    }
+
+    private static void requireSeller(Order order, LoginUser user, String message) {
+        if (!isSeller(order, user)) {
             throw new ForbiddenOperationException(message);
         }
     }

@@ -3,6 +3,7 @@ package ntou.cs.secondhandbook;
 import ntou.cs.secondhandbook.exception.InvalidBookException;
 import ntou.cs.secondhandbook.model.Book;
 import ntou.cs.secondhandbook.model.BookForm;
+import ntou.cs.secondhandbook.model.LoginUser;
 import ntou.cs.secondhandbook.repository.BookRepository;
 import ntou.cs.secondhandbook.service.BookService;
 import ntou.cs.secondhandbook.service.FileStorageService;
@@ -37,6 +38,8 @@ class BookServiceTest {
             new MockMultipartFile("image", "cover.jpg", "image/jpeg", new byte[]{1, 2, 3});
 
     // 一份所有必填欄位都正確的表單，各測試再改掉要測的那一格
+    private static final LoginUser SELLER = new LoginUser("uA", "阿明", "amin@mail.ntou.edu.tw", "IG amin");
+
     private BookForm validForm() {
         BookForm form = new BookForm();
         form.setTitle("資料結構");
@@ -48,7 +51,7 @@ class BookServiceTest {
     }
 
     private void assertRejected(BookForm form, String expectedMessage) {
-        InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.addBook(form));
+        InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.addBook(form, SELLER));
         assertEquals(expectedMessage, ex.getMessage());
         verifyNoInteractions(repository);
     }
@@ -76,9 +79,7 @@ class BookServiceTest {
         BookForm form = validForm();
         form.setAuthor("Horowitz");
         form.setCondition("有少量螢光筆畫記，無缺頁");
-        form.setSellerName("阿明");
-        form.setSellerContact("amin@mail.ntou.edu.tw");
-        Book book = bookService.addBook(form);
+        Book book = bookService.addBook(form, SELLER);
 
         assertEquals("資料結構", book.getTitle());
         assertEquals("良好", book.getConditionGrade());
@@ -87,6 +88,10 @@ class BookServiceTest {
         assertEquals("待審核", book.getStatus());
         assertEquals("/uploads/abc_cover.jpg", book.getImageUrl());
         assertNotNull(book.getCreatedAt());
+        // T05：賣家資料從登入者帶入，不放 Email
+        assertEquals("uA", book.getSellerId());
+        assertEquals("阿明", book.getSellerName());
+        assertEquals("IG amin", book.getSellerContact());
         verify(repository).save(any(Book.class));
     }
 
@@ -123,7 +128,7 @@ class BookServiceTest {
         for (String badPrice : new String[]{"-50", "abc", "0", "12.5"}) {
             BookForm form = validForm();
             form.setPrice(badPrice);
-            InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.addBook(form));
+            InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.addBook(form, SELLER));
             assertEquals("售價必須為正整數", ex.getMessage(), "售價 " + badPrice);
         }
         verifyNoInteractions(repository);
@@ -150,7 +155,7 @@ class BookServiceTest {
 
         BookForm form = validForm();
         form.setShippingFee("60"); // 沒勾可寄送，填了運費也不算
-        Book book = bookService.addBook(form);
+        Book book = bookService.addBook(form, SELLER);
 
         assertFalse(book.isShippable());
         assertNull(book.getShippingFee());
@@ -164,7 +169,7 @@ class BookServiceTest {
         BookForm form = validForm();
         form.setShippable(true);
         form.setShippingFee("60");
-        Book book = bookService.addBook(form);
+        Book book = bookService.addBook(form, SELLER);
 
         assertTrue(book.isShippable());
         assertEquals(60, book.getShippingFee());
@@ -179,7 +184,7 @@ class BookServiceTest {
         form.setShippable(true);
         form.setShippingFee("0");
 
-        assertEquals(0, bookService.addBook(form).getShippingFee());
+        assertEquals(0, bookService.addBook(form, SELLER).getShippingFee());
     }
 
     @Test
@@ -195,7 +200,7 @@ class BookServiceTest {
             BookForm form = validForm();
             form.setShippable(true);
             form.setShippingFee(badFee);
-            InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.addBook(form));
+            InvalidBookException ex = assertThrows(InvalidBookException.class, () -> bookService.addBook(form, SELLER));
             assertEquals("運費必須為 0 以上的整數", ex.getMessage(), "運費 " + badFee);
         }
         verifyNoInteractions(repository);

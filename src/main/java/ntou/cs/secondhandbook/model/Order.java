@@ -27,8 +27,10 @@ public class Order {
 
     @Id
     private String id;
-    private String buyerName;
-    private String sellerName;
+    private String buyerId;         // 買家的使用者編號（T05），用來判斷權限
+    private String buyerName;       // 買家姓名，只拿來顯示
+    private String sellerId;        // 賣家的使用者編號（T05），用來判斷權限
+    private String sellerName;      // 賣家姓名，只拿來顯示
     private List<OrderItem> items = new ArrayList<>();
     private String deliveryMethod;  // 面交或寄送
     private int shippingFee;        // 面交為 0；寄送時一筆訂單只收一次，取這幾本書中最高的運費
@@ -44,6 +46,22 @@ public class Order {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getBuyerId() {
+        return buyerId;
+    }
+
+    public void setBuyerId(String buyerId) {
+        this.buyerId = buyerId;
+    }
+
+    public String getSellerId() {
+        return sellerId;
+    }
+
+    public void setSellerId(String sellerId) {
+        this.sellerId = sellerId;
     }
 
     public String getBuyerName() {

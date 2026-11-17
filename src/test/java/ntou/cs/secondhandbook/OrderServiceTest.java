@@ -3,6 +3,7 @@ package ntou.cs.secondhandbook;
 import ntou.cs.secondhandbook.exception.ForbiddenOperationException;
 import ntou.cs.secondhandbook.exception.InvalidOrderException;
 import ntou.cs.secondhandbook.model.Book;
+import ntou.cs.secondhandbook.model.LoginUser;
 import ntou.cs.secondhandbook.model.Order;
 import ntou.cs.secondhandbook.model.OrderForm;
 import ntou.cs.secondhandbook.repository.BookRepository;
@@ -43,10 +44,15 @@ class OrderServiceTest {
     private final Map<String, Order> orderDb = new HashMap<>();
     private int nextOrderId = 1;
 
-    private static final String SELLER_A = "阿明";
-    private static final String SELLER_B = "阿華";
-    private static final String BUYER = "小美";
-    private static final String OTHER_BUYER = "小強";
+    // T05：用登入者判斷身分，比對的是使用者編號，不是姓名
+    private static final LoginUser SELLER_A = user("uA", "阿明");
+    private static final LoginUser SELLER_B = user("uB", "阿華");
+    private static final LoginUser BUYER = user("u1", "小美");
+    private static final LoginUser OTHER_BUYER = user("u2", "小強");
+
+    private static LoginUser user(String id, String name) {
+        return new LoginUser(id, name, id + "@mail.ntou.edu.tw", "IG " + name);
+    }
 
     @BeforeEach
     void fakeDatabase() {
@@ -79,11 +85,14 @@ class OrderServiceTest {
     }
 
     // 建一本書放進假資料庫；shippingFee 給 null 代表不可寄送
-    private Book book(String id, String seller, int price, Integer shippingFee) {
+    private Book book(String id, LoginUser seller, int price, Integer shippingFee) {
         Book b = new Book();
         b.setId(id);
         b.setTitle("書" + id);
-        b.setSellerName(seller);
+        if (seller != null) {
+            b.setSellerId(seller.id());
+            b.setSellerName(seller.name());
+        }
         b.setPrice(price);
         b.setShippable(shippingFee != null);
         b.setShippingFee(shippingFee);
@@ -125,8 +134,10 @@ class OrderServiceTest {
         Order order = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1", "a2"));
 
         assertEquals(1, orderDb.size());
-        assertEquals(SELLER_A, order.getSellerName());
-        assertEquals(BUYER, order.getBuyerName());
+        assertEquals(SELLER_A.id(), order.getSellerId());
+        assertEquals("阿明", order.getSellerName());
+        assertEquals(BUYER.id(), order.getBuyerId());
+        assertEquals("小美", order.getBuyerName());
         assertEquals(2, order.getItems().size());
         assertEquals(350, order.getTotalAmount());
         assertEquals(Order.STATUS_WAITING_SELLER, order.getStatus());
@@ -216,7 +227,18 @@ class OrderServiceTest {
     }
 
     @Test
-    void 沒有賣家名稱的書_不能下單() {
+    void 買家和賣家同名但不同帳號_可以下單_權限照帳號判斷() {
+        LoginUser sameNameBuyer = user("u9", "阿明");
+        book("a1", SELLER_A, 200, null);
+        String id = orderService.createOrder(sameNameBuyer, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
+
+        // 同名的買家不能用賣家的身分接受訂單
+        assertThrows(ForbiddenOperationException.class, () -> orderService.accept(sameNameBuyer, id));
+        assertEquals(Order.STATUS_TO_DELIVER, orderService.accept(SELLER_A, id).getStatus());
+    }
+
+    @Test
+    void 沒有賣家帳號的書_不能下單() {
         book("a1", null, 200, null);
         assertThrows(InvalidOrderException.class,
                 () -> orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")));

@@ -4,6 +4,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 // 刊登表單送進來的原始資料（都先當文字收，檢查交給 BookService）
 // Spring 會依欄位名稱把 multipart/form-data 的同名欄位自動填進來
+// 賣家資料不在表單裡：T05 起由登入者帶入（見 BookService.addBook）
 public class BookForm {
 
     private String title;
@@ -14,8 +15,6 @@ public class BookForm {
     private String price;
     private boolean shippable;   // 勾選「可寄送」時為 true
     private String shippingFee;
-    private String sellerName;
-    private String sellerContact;
     private MultipartFile image;
 
     // Getters and setters for all fields
@@ -82,22 +81,6 @@ public class BookForm {
 
     public void setShippingFee(String shippingFee) {
         this.shippingFee = shippingFee;
-    }
-
-    public String getSellerName() {
-        return sellerName;
-    }
-
-    public void setSellerName(String sellerName) {
-        this.sellerName = sellerName;
-    }
-
-    public String getSellerContact() {
-        return sellerContact;
-    }
-
-    public void setSellerContact(String sellerContact) {
-        this.sellerContact = sellerContact;
     }
 
     public MultipartFile getImage() {
