@@ -6,8 +6,8 @@
 
 ## 文件與看板
 
-- 需求文件（HackMD）：https://hackmd.io/QnFb1yC8Qa2DJOQW3-GSNA
-- 使用者故事地圖（Miro）：https://miro.com/app/board/uXjVEcYsoOo=/?share_link_id=124746616302
+- 需求文件（HackMD）：https://hackmd.io/@JG5S7CRvTyC3YMMPTVlj2A/r1RLAnxqze
+- 使用者故事地圖（Miro）：https://miro.com/app/board/uXjVEcYsoOo=/?share_link_id=915811621196
 - 專案看板（Trello）：https://trello.com/b/hiVszH61
 - 實作影片：https://youtu.be/OoV9Ew2TyBw
 
