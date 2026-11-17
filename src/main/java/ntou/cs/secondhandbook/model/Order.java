@@ -22,6 +22,9 @@ public class Order {
     public static final String DELIVERY_FACE_TO_FACE = "面交";
     public static final String DELIVERY_SHIPPING = "寄送";
 
+    // 自動拒絕的原因開頭（T11）。賣家手動拒絕時 rejectReason 是 null，前端用這點分辨兩種拒絕
+    public static final String AUTO_REJECT_REASON_PREFIX = "賣家已接受其他買家的訂單：";
+
     @Id
     private String id;
     private String buyerName;
@@ -31,6 +34,7 @@ public class Order {
     private int shippingFee;        // 面交為 0；寄送時一筆訂單只收一次，取這幾本書中最高的運費
     private int totalAmount;        // 書價合計 + shippingFee
     private String status;
+    private String rejectReason;    // 自動拒絕時寫原因，例如「賣家已接受其他買家的訂單：《書名》」；手動拒絕是 null
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -96,6 +100,14 @@ public class Order {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public void setRejectReason(String rejectReason) {
+        this.rejectReason = rejectReason;
     }
 
     public LocalDateTime getCreatedAt() {

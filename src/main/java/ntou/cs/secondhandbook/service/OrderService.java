@@ -118,6 +118,7 @@ public class OrderService {
     // ===== US05 處理訂單（賣家） =====
 
     // 接受：訂單 → 待交付，書 → 保留中。接受前再確認一次書還能賣（可能已經接受了別人的訂單）
+    // 接受後，含有同一本書的其他「待賣家回覆」訂單自動拒絕（T11，2026-11-17 Michael 決定）
     public Order accept(String userName, String orderId) {
         Order order = findOrder(orderId);
         requireSeller(order, userName, "只有這筆訂單的賣家可以接受訂單");
@@ -135,7 +136,29 @@ public class OrderService {
             book.setStatus(Book.STATUS_RESERVED);
         }
         bookRepository.saveAll(books);
-        return changeStatus(order, Order.STATUS_TO_DELIVER);
+        Order accepted = changeStatus(order, Order.STATUS_TO_DELIVER);
+        rejectOtherOrdersForBooks(accepted, books);
+        return accepted;
+    }
+
+    // 把含有這些書、還在「待賣家回覆」的其他訂單改成已拒絕，並寫上原因，買家才看得出不是賣家手動拒絕。
+    // 一筆訂單不拆開：只要有一本書被保留，整筆拒絕。書的狀態不用再動。
+    private void rejectOtherOrdersForBooks(Order accepted, List<Book> reservedBooks) {
+        List<String> bookIds = reservedBooks.stream().map(Book::getId).toList();
+        List<Order> others = orderRepository.findByStatusAndItemsBookIdIn(Order.STATUS_WAITING_SELLER, bookIds);
+        for (Order other : others) {
+            if (other.getId() == null || other.getId().equals(accepted.getId())) {
+                continue;
+            }
+            String titles = other.getItems().stream()
+                    .filter(item -> bookIds.contains(item.getBookId()))
+                    .map(item -> "《" + item.getTitle() + "》")
+                    .distinct()
+                    .reduce((a, b) -> a + "、" + b)
+                    .orElse("");
+            other.setRejectReason(Order.AUTO_REJECT_REASON_PREFIX + titles);
+            changeStatus(other, Order.STATUS_REJECTED);
+        }
     }
 
     // 拒絕：訂單 → 已拒絕。書在待賣家回覆時沒被保留，所以不用動

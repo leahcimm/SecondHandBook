@@ -67,6 +67,15 @@ class OrderServiceTest {
             orderDb.put(o.getId(), o);
             return o;
         });
+        // T11：找某個狀態、含有其中任一本書的訂單（真的資料庫查 items.bookId）
+        lenient().when(orderRepository.findByStatusAndItemsBookIdIn(anyString(), any())).thenAnswer(inv -> {
+            String status = inv.getArgument(0);
+            java.util.Collection<String> ids = inv.getArgument(1);
+            return orderDb.values().stream()
+                    .filter(o -> status.equals(o.getStatus()))
+                    .filter(o -> o.getItems().stream().anyMatch(item -> ids.contains(item.getBookId())))
+                    .toList();
+        });
     }
 
     // 建一本書放進假資料庫；shippingFee 給 null 代表不可寄送
@@ -270,39 +279,90 @@ class OrderServiceTest {
         assertEquals(Order.STATUS_WAITING_SELLER, orderDb.get(id).getStatus());
     }
 
+    // ===== T11 接受一筆後，同一本書的其他待回覆訂單自動拒絕 =====
+
     @Test
-    void 同一本書有兩筆待回覆訂單_接受第一筆後_拒絕第二筆不會把書放回上架中() {
+    void 同一本書有兩筆待回覆訂單_接受第一筆後_第二筆自動已拒絕_第一筆待交付_書保留中() {
         book("a1", SELLER_A, 200, null);
         String first = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
         String second = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
 
         orderService.accept(SELLER_A, first);
-        orderService.reject(SELLER_A, second);
 
+        assertEquals(Order.STATUS_TO_DELIVER, orderDb.get(first).getStatus());
+        assertNull(orderDb.get(first).getRejectReason());
+        assertEquals(Order.STATUS_REJECTED, orderDb.get(second).getStatus());
+        assertEquals("賣家已接受其他買家的訂單：《書a1》", orderDb.get(second).getRejectReason());
         assertEquals(Book.STATUS_RESERVED, bookStatus("a1"));
     }
 
     @Test
-    void 同一本書有兩筆待回覆訂單_接受第一筆後_取消第二筆也不會放回上架中() {
+    void 賣家手動拒絕_沒有拒絕原因_和自動拒絕分得出來() {
+        String id = pendingOrder();
+
+        Order order = orderService.reject(SELLER_A, id);
+
+        assertEquals(Order.STATUS_REJECTED, order.getStatus());
+        assertNull(order.getRejectReason());
+    }
+
+    @Test
+    void 自動拒絕時_不相干的訂單不受影響() {
         book("a1", SELLER_A, 200, null);
+        book("a2", SELLER_A, 150, null);
+        book("b1", SELLER_B, 100, null);
         String first = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
-        String second = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
+        String sameSellerOtherBook = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a2")).getId();
+        String otherSeller = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "b1")).getId();
 
         orderService.accept(SELLER_A, first);
-        orderService.cancel(OTHER_BUYER, second);
 
-        assertEquals(Book.STATUS_RESERVED, bookStatus("a1"));
+        assertEquals(Order.STATUS_WAITING_SELLER, orderDb.get(sameSellerOtherBook).getStatus());
+        assertEquals(Order.STATUS_WAITING_SELLER, orderDb.get(otherSeller).getStatus());
+        assertNull(orderDb.get(sameSellerOtherBook).getRejectReason());
+        assertEquals(Book.STATUS_ON_SALE, bookStatus("a2"));
+        assertEquals(Book.STATUS_ON_SALE, bookStatus("b1"));
     }
 
     @Test
-    void 書已被別筆訂單保留_不能再接受另一筆() {
+    void 另一筆訂單只有部分書被保留_也整筆拒絕_原因只列被保留的書() {
+        book("a1", SELLER_A, 200, null);
+        book("a2", SELLER_A, 150, null);
+        String first = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
+        String second = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1", "a2")).getId();
+
+        orderService.accept(SELLER_A, first);
+
+        assertEquals(Order.STATUS_REJECTED, orderDb.get(second).getStatus());
+        assertEquals("賣家已接受其他買家的訂單：《書a1》", orderDb.get(second).getRejectReason());
+        assertEquals(Book.STATUS_ON_SALE, bookStatus("a2")); // 沒被保留的書不動
+    }
+
+    @Test
+    void 已待交付或已取消的訂單_不會被自動拒絕() {
+        book("a1", SELLER_A, 200, null);
+        String cancelled = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
+        orderService.cancel(OTHER_BUYER, cancelled);
+        String first = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
+
+        orderService.accept(SELLER_A, first);
+
+        assertEquals(Order.STATUS_CANCELLED, orderDb.get(cancelled).getStatus());
+        assertNull(orderDb.get(cancelled).getRejectReason());
+    }
+
+    @Test
+    void 被自動拒絕的訂單_不能再接受拒絕或取消_書仍保留中() {
         book("a1", SELLER_A, 200, null);
         String first = orderService.createOrder(BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
         String second = orderService.createOrder(OTHER_BUYER, form(Order.DELIVERY_FACE_TO_FACE, "a1")).getId();
         orderService.accept(SELLER_A, first);
 
         assertThrows(InvalidOrderException.class, () -> orderService.accept(SELLER_A, second));
-        assertEquals(Order.STATUS_WAITING_SELLER, orderDb.get(second).getStatus());
+        assertThrows(InvalidOrderException.class, () -> orderService.reject(SELLER_A, second));
+        assertThrows(InvalidOrderException.class, () -> orderService.cancel(OTHER_BUYER, second));
+        assertEquals(Order.STATUS_REJECTED, orderDb.get(second).getStatus());
+        assertEquals(Book.STATUS_RESERVED, bookStatus("a1"));
     }
 
     // ===== US11 確認收書、取消訂單 =====
