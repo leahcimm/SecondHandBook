@@ -76,16 +76,7 @@
             <small class="form-text text-muted">JPG、PNG、WEBP，單張不超過 10MB</small>
             <div class="mt-2"><img id="preview" alt="照片預覽" class="img-thumbnail"></div>
         </div>
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label for="sellerName" class="form-label">賣家稱呼</label>
-                <input type="text" class="form-control" id="sellerName" name="sellerName" placeholder="例如：資工三 阿明">
-            </div>
-            <div class="col-md-6 mb-3">
-                <label for="sellerContact" class="form-label">聯絡方式</label>
-                <input type="text" class="form-control" id="sellerContact" name="sellerContact" placeholder="Email 或 IG">
-            </div>
-        </div>
+        <p class="text-muted small mb-3" id="sellerInfo"></p>
         <button type="submit" class="btn btn-primary">送出刊登</button>
         <a href="index.html" class="btn btn-secondary">取消</a>
     </form>
@@ -185,15 +176,12 @@
         submitButton.disabled = true;
         submitButton.textContent = '送出中...';
 
-        fetch('/api/books', { //按下送出時，把表單打包送到 /api/books
+        // 按下送出時，把表單打包送到 /api/books；沒登入或登入過期時 api() 會帶去登入頁
+        api('/api/books', {
             method: 'POST',
             body: formData
         })
-            .then(response => response.json().then(data => ({ ok: response.ok, data })))
-            .then(({ ok, data }) => {
-                if (!ok) {
-                    throw new Error(data.message || '刊登失敗');
-                }
+            .then(() => {
                 window.location.href = 'index.html?posted=1';
             })
             .catch(error => {
@@ -207,10 +195,16 @@
             });
     });
 
-    document.addEventListener('DOMContentLoaded', function () {
-        renderNavbar();
-        // 賣家稱呼預設帶入右上角的名稱，之後才能用同一個名稱處理收到的訂單
-        document.getElementById('sellerName').value = getUserName();
+    document.addEventListener('DOMContentLoaded', async function () {
+        // 刊登要登入，沒登入直接帶去登入頁，不讓使用者填完才發現
+        const user = await renderNavbar();
+        if (!user) {
+            goLogin();
+            return;
+        }
+        // 賣家姓名和聯絡方式從帳號帶入（T05 Michael 決定），這裡只告訴使用者會顯示什麼
+        document.getElementById('sellerInfo').textContent =
+            `賣家資料會從你的帳號帶入，列表上顯示：${user.name}（聯絡方式：${user.contact}）`;
         fillSubjectOptions(document.getElementById('subject'));
         fillConditionOptions(document.getElementById('conditionGrade'), true);
     });

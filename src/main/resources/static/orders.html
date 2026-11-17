@@ -99,10 +99,6 @@
 
     async function loadOrders() {
         const list = document.getElementById('orderList');
-        if (!getUserName()) {
-            list.innerHTML = '<div class="alert alert-warning">請先在右上角輸入你的名稱，才能看到你的訂單。</div>';
-            return;
-        }
         try {
             renderOrders(await api('/api/orders?role=' + role));
         } catch (error) {
@@ -137,8 +133,12 @@
         loadOrders();
     }));
 
-    document.addEventListener('DOMContentLoaded', function () {
-        renderNavbar(loadOrders);
+    document.addEventListener('DOMContentLoaded', async function () {
+        // 看訂單要登入，沒登入直接帶去登入頁
+        if (!await renderNavbar()) {
+            goLogin();
+            return;
+        }
         loadOrders();
     });
 </script>

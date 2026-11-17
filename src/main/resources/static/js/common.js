@@ -1,4 +1,4 @@
-// 各頁面共用的東西：科目清單、書況等級、交付方式、文字跳脫、導覽列、暫代身分、訂單 API、購物車
+// 各頁面共用的東西：科目清單、書況等級、交付方式、文字跳脫、導覽列和登入者、呼叫 API、購物車
 
 // 科目清單（刊登頁的下拉選單、列表頁的篩選都用這份）
 const SUBJECTS = [
@@ -56,10 +56,12 @@ function escapeHtml(text) {
         .replace(/'/g, '&#39;');
 }
 
-// ===== 共用導覽列 =====
-// 每一頁放 <nav id="navbar"></nav>，再呼叫 renderNavbar()。
-// 導覽列右邊有「你的名稱」欄位：這是登入前的暫代身分（T03 決定），T05 做登入後拿掉這一塊。
-function renderNavbar(onUserChange) {
+// ===== 共用導覽列和登入者 =====
+// 每一頁放 <nav id="navbar"></nav>，再 await renderNavbar()，拿到登入者（沒登入是 null）。
+// 登入者的資料是 {id, name, email, contact}，從後端 GET /api/auth/me 取得（T05）。
+let currentUser = null;
+
+async function renderNavbar() {
     const nav = document.getElementById('navbar');
     nav.className = 'navbar navbar-expand navbar-dark bg-primary mb-4';
     nav.innerHTML = `
@@ -71,21 +73,52 @@ function renderNavbar(onUserChange) {
                 <a class="btn btn-light btn-sm" href="cart.html"><i class="fas fa-shopping-cart"></i> 購物車
                     <span class="badge bg-danger" id="cartCount"></span></a>
                 <a class="btn btn-light btn-sm" href="orders.html"><i class="fas fa-receipt"></i> 我的訂單</a>
-                <div class="input-group input-group-sm" style="width: 220px;">
-                    <span class="input-group-text"><i class="fas fa-user"></i></span>
-                    <input type="text" class="form-control" id="userName" placeholder="你的名稱（暫代登入）"
-                           title="和刊登書籍時填的賣家稱呼一樣，才能處理自己收到的訂單">
-                </div>
+                <span class="d-flex align-items-center gap-2" id="userArea"></span>
             </div>
         </div>`;
-    const input = document.getElementById('userName');
-    input.value = getUserName();
-    input.addEventListener('change', () => {
-        setUserName(input.value.trim());
-        input.value = getUserName();
-        if (onUserChange) onUserChange();
-    });
     updateCartCount();
+    currentUser = await fetchCurrentUser();
+    const userArea = document.getElementById('userArea');
+    if (currentUser) {
+        userArea.innerHTML = `
+            <span class="text-white" id="loginUserName"><i class="fas fa-user"></i> ${escapeHtml(currentUser.name)}</span>
+            <button class="btn btn-outline-light btn-sm" id="logoutButton"><i class="fas fa-sign-out-alt"></i> 登出</button>`;
+        document.getElementById('logoutButton').addEventListener('click', logout);
+    } else {
+        userArea.innerHTML = `
+            <a class="btn btn-warning btn-sm" href="${loginUrl()}" id="loginLink"><i class="fas fa-sign-in-alt"></i> 登入</a>
+            <a class="btn btn-outline-light btn-sm" href="register.html" id="registerLink">註冊</a>`;
+    }
+    return currentUser;
+}
+
+// 問後端目前是誰登入；沒登入（401）或連不上都當成沒登入
+async function fetchCurrentUser() {
+    try {
+        const response = await fetch('/api/auth/me');
+        return response.ok ? await response.json() : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function logout() {
+    try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+        // 連不上也照樣回首頁
+    }
+    window.location.href = 'index.html';
+}
+
+// 登入頁的網址，帶上目前這一頁，登入後回到這裡
+function loginUrl() {
+    const here = window.location.pathname + window.location.search;
+    return 'login.html?next=' + encodeURIComponent(here);
+}
+
+function goLogin() {
+    window.location.href = loginUrl();
 }
 
 // localStorage 在無痕視窗或被封鎖時可能丟錯，所以都包 try/catch
@@ -106,29 +139,23 @@ function storageSet(key, value) {
     }
 }
 
-function getUserName() {
-    return storageGet('userName', '');
-}
-
-function setUserName(name) {
-    storageSet('userName', name);
-}
-
-// ===== 呼叫訂單 API =====
-// 自動帶上目前使用者的標頭 X-User-Name（中文要先 encodeURIComponent，否則 fetch 會出錯）。
+// ===== 呼叫要登入的 API =====
+// 登入靠 Session Cookie，瀏覽器會自動帶上（同源），不用另外加標頭。
 // 後端錯誤統一是 {"message": "..."}，這裡轉成 Error 丟出，畫面再顯示 error.message。
+// 收到 401（沒登入或登入過期）時，直接帶使用者到登入頁，登入後回到原本那一頁。
 async function api(path, options = {}) {
-    const name = getUserName();
-    if (!name) {
-        throw new Error('請先在右上角輸入你的名稱');
-    }
-    const headers = Object.assign({ 'X-User-Name': encodeURIComponent(name) }, options.headers || {});
-    if (options.body) headers['Content-Type'] = 'application/json';
+    const headers = Object.assign({}, options.headers || {});
+    // body 是字串時才是 JSON；FormData（上傳照片）要讓瀏覽器自己設 Content-Type
+    if (typeof options.body === 'string') headers['Content-Type'] = 'application/json';
     let response;
     try {
         response = await fetch(path, Object.assign({}, options, { headers }));
     } catch (e) {
         throw new Error('無法連線到伺服器，請稍後再試');
+    }
+    if (response.status === 401) {
+        goLogin();
+        throw new Error('請先登入');
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -138,9 +165,11 @@ async function api(path, options = {}) {
 }
 
 // ===== 購物車（存在瀏覽器，PLAN 技術決定） =====
-// 每一項是加入當下書的資料：{ id, title, author, price, sellerName, shippable, shippingFee }
+// 每一項是加入當下書的資料：{ id, title, author, price, sellerId, sellerName, shippable, shippingFee }
+// 賣家用 sellerId 分辨（T12），姓名可能重複。T04 存的舊項目沒有 sellerId，讀出來時直接略過。
 function getCart() {
-    return storageGet('cart', []);
+    const cart = storageGet('cart', []);
+    return Array.isArray(cart) ? cart.filter(item => item && item.sellerId) : [];
 }
 
 function saveCart(cart) {

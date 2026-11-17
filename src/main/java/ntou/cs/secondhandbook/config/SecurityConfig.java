@@ -44,7 +44,7 @@ public class SecurityConfig {
                         // 靜態頁面和 /uploads/** 不用登入；頁面要不要登入由前端呼叫 API 後判斷
                         .anyRequest().permitAll())
                 .formLogin(form -> form
-                        // 登入頁 T12 才做；設定它是為了關掉 Spring Security 自動產生的 /login 頁面
+                        // 登入頁是 static/login.html（T12）；設定它也關掉 Spring Security 自動產生的 /login 頁面
                         .loginPage("/login.html")
                         .loginProcessingUrl(LOGIN_URL)
                         .usernameParameter("email")
@@ -61,7 +61,7 @@ public class SecurityConfig {
                         .logoutSuccessHandler((request, response, authentication) ->
                                 writeJson(response, objectMapper, HttpServletResponse.SC_OK,
                                         Map.of("message", "已登出"))))
-                // 沒登入就呼叫要登入的 API：回 401 JSON，前端 api() 會顯示訊息（T12 再帶去登入頁）
+                // 沒登入就呼叫要登入的 API：回 401 JSON，前端 api() 收到後帶使用者去登入頁（T12）
                 .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, exception) ->
                         writeJson(response, objectMapper, HttpServletResponse.SC_UNAUTHORIZED,
                                 Map.of("message", "請先登入"))));

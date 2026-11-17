@@ -157,8 +157,8 @@
         if (book.status === '保留中') return '<span class="text-muted"><i class="fas fa-lock"></i> 已保留，暫時不能購買</span>';
         if (book.status === '已售出') return '<span class="text-muted"><i class="fas fa-check"></i> 已售出</span>';
         if (!ORDERABLE_BOOK_STATUSES.includes(book.status)) return '';
-        if (!book.sellerName) return '<span class="text-muted small">沒有賣家資料，不能下單</span>';
-        if (book.sellerName === getUserName()) return '<span class="text-muted small">這是你刊登的書</span>';
+        if (!book.sellerId) return '<span class="text-muted small">沒有賣家資料，不能下單</span>';
+        if (currentUser && book.sellerId === currentUser.id) return '<span class="text-muted small">這是你刊登的書</span>';
         if (getCart().some(item => item.id === book.id)) {
             return '<a class="btn btn-outline-secondary btn-sm" href="cart.html"><i class="fas fa-check"></i> 已在購物車</a>';
         }
@@ -175,7 +175,7 @@
         }
         cart.push({
             id: book.id, title: book.title, author: book.author, price: book.price,
-            sellerName: book.sellerName, shippable: book.shippable, shippingFee: book.shippingFee
+            sellerId: book.sellerId, sellerName: book.sellerName, shippable: book.shippable, shippingFee: book.shippingFee
         });
         saveCart(cart);
         showAlert('message', 'success', `已加入購物車：《${book.title}》`);
@@ -198,9 +198,9 @@
     ['subject', 'conditionGrade', 'sort'].forEach(id =>
         document.getElementById(id).addEventListener('change', fetchBooks));
 
-    document.addEventListener('DOMContentLoaded', function () {
-        // 換名稱時重畫卡片（自己的書不顯示購買按鈕）
-        renderNavbar(() => renderBooks(lastBooks, lastFiltered));
+    document.addEventListener('DOMContentLoaded', async function () {
+        // 先知道登入者是誰，卡片才能判斷「這是你刊登的書」
+        await renderNavbar();
         fillSubjectOptions(document.getElementById('subject'));
         fillConditionOptions(document.getElementById('conditionGrade'), false);
 
