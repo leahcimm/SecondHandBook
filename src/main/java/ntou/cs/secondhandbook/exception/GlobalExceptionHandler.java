@@ -27,4 +27,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(404).body(Map.of("message", "找不到這本書"));
     }
+
+    // ===== 訂單 =====
+
+    @ExceptionHandler(InvalidOrderException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidOrder(InvalidOrderException ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleOrderNotFound(OrderNotFoundException ex) {
+        return ResponseEntity.status(404).body(Map.of("message", "找不到這筆訂單"));
+    }
+
+    @ExceptionHandler(ForbiddenOperationException.class)
+    public ResponseEntity<Map<String, String>> handleForbidden(ForbiddenOperationException ex) {
+        return ResponseEntity.status(403).body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MissingUserException.class)
+    public ResponseEntity<Map<String, String>> handleMissingUser(MissingUserException ex) {
+        return ResponseEntity.status(401).body(Map.of("message", ex.getMessage()));
+    }
 }

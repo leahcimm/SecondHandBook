@@ -9,7 +9,11 @@ import java.util.List;
 @Document(collection = "books") //每本刊登的書有哪些欄位
 public class Book {
 
+    // 書籍狀態，見需求文件第 6 章「書籍狀態」
     public static final String STATUS_PENDING = "待審核";
+    public static final String STATUS_ON_SALE = "上架中";
+    public static final String STATUS_RESERVED = "保留中"; // 賣家接受訂單後，其他人不能下單
+    public static final String STATUS_SOLD = "已售出";     // 買家確認收到後
 
     // 書況五級（由新到舊），刊登時必選一個；排序「依書況」也照這個順序
     public static final List<String> CONDITION_GRADES = List.of("全新", "近全新", "良好", "普通", "有缺損");
